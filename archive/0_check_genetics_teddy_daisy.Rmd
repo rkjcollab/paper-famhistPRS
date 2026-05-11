@@ -1,0 +1,467 @@
+---
+title: "check_genetics_teddy_daisy"
+author: "SDS"
+date: "Last compiled on `r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: kable
+    code_folding: hide
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = 
+  paste0(Sys.getenv("RKJCOLLAB"), "/Maternal_Protection/reports/TEDDYreports/teddy_risk_scores")) })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(
+  root.dir = paste0(Sys.getenv("RKJCOLLAB")))
+
+library(tidyverse)
+library(conflicted)
+library(readxl)
+library(kableExtra)
+library(vcfR)
+library(DT)
+library(ggvenn)
+library(biomaRt)
+
+
+```
+
+# **Overview**
+
+This report was prompted by VERY different GRS2 SNP availability in TEDDY
+(calculated in explore_matprot/teddy_risk_scores/calc_teddy_risk_scores.Rmd on
+GitHub) compared to DAISY (calculated in
+DAISY/genetics/risk_scores/code/calc_daisy_grs2.Rmd). Specifically looking at
+the Excel file (T1DGRS67_TOPMED_hg38.xlsx) with all haplogenotypes and SNPs in
+the GRS2 (PMID 30655379) from the HLA haplotype pipeline on
+[GitHub](https://github.com/sethsh7/hla-prs-toolkit).
+
+
+**Outline:**
+
+1. Compare Unimputed Exome Data
+2. Compare TOPMed Imputed Data *TODO!*
+
+# **Load Data**
+
+```{r load_data, message = F}
+# Load exome chip data
+raw_bim_t <- read_delim(
+  "Maternal_Protection/raw/TEDDYarrays_v2/additional_data/Norris_SNP_exome_masked.bim",
+  col_names = c("chr", "id", "cm", "pos", "a1", "a2"))
+raw_bim_d <- read_delim(
+  "DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/clean/daisyexome.bim",
+  col_names = c("chr", "id", "cm", "pos", "a1", "a2"))
+
+# Load MAF for exome chip data
+raw_maf_t <- read_delim(
+  "Maternal_Protection/data/genetics/teddy/exome/Norris_SNP_exome_masked_freq.afreq")
+raw_maf_d <- read_delim(
+  "DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/clean/daisyexome_freq.afreq")
+
+# Research GRS2 files
+# hla prs toolkit Excel mapping file
+map_tk <- read_xlsx(
+  "Maternal_Protection/background/teddy_risk_scores/from_hla-prs-toolkit/T1DGRS67_TOPMED_hg38.xlsx")
+
+```
+
+# **1. Compare Unimputed Exome Data**
+
+## **Inputs**
+
+TEDDY: Maternal_Protection/raw/TEDDYarrays_v2/additional_data/Norris_SNP_exome_masked
+
+DAISY:
+
++ DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/clean/daisyexome
++ DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/daisyraw0
+
+Not sure which DAISY files to use for comparison - raw or cleaned. Can't find
+documentation in TEDDY release about cleaning for TEDDY. Check number of SNPS:
+
+```{bash}
+wc -l Maternal_Protection/raw/TEDDYarrays_v2/additional_data/Norris_SNP_exome_masked.bim
+wc -l DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/clean/daisyexome.bim
+wc -l DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/daisyraw0.bim
+```
+
+Based on this, move forward with the cleaned daisyexome files for comparison.
+
+## **Compare Variant Overlap**
+
+*To note: both raw datasets are in hg19.*
+
+### **Compare by RSID**
+
+DAISY has non-standard ID formats:
+
+```{r}
+head(raw_bim_d)
+```
+
+TEDDY appears to be more standard:
+
+```{r}
+head(raw_bim_t)
+```
+
+Check if all variant names are unique in both files:
+
++ `r n_distinct(raw_bim_t$id)` / `r nrow(raw_bim_t$id)` distinct in TEDDY
++ `r n_distinct(raw_bim_d$id)` / `r nrow(raw_bim_d$id)` distinct in DAISY
+
+Check overlap as is:
+
+```{r}
+raw_bim_merge_id <- inner_join(raw_bim_t, raw_bim_d, by = c("id"), suffix = c("_t", "_d"))
+count_raw_bim_merge_id <- nrow(raw_bim_merge_id)
+
+```
+
+There are only `r count_raw_bim_merge_id` overlapping variants by the ID column.
+This could be due to differences in formatting.
+
+Do any of the variants mapped by ID have different positions?
+
+```{r}
+raw_bim_merge_id %>% dplyr::filter(pos_t != pos_d)
+```
+
+### **Compare by Chromosome and Position**
+
+Check if all variant positions are unique in both files:
+
++ `r n_distinct(raw_bim_t$pos)` / `r nrow(raw_bim_t$id)` distinct in TEDDY
++ `r n_distinct(raw_bim_d$pos)` / `r nrow(raw_bim_d$id)` distinct in DAISY
+
+There are more duplicate positions in the DAISY dataset than in the TEDDY
+dataset. Keep this in mind as merge below will have two entries for one variant
+since merging by chr and pos.
+
+```{r}
+raw_bim_merge_pos <- inner_join(raw_bim_t, raw_bim_d, by = c("chr", "pos"),
+                                suffix = c("_t", "_d"))
+count_raw_bim_merge_pos <- nrow(raw_bim_merge_pos)
+count_raw_bim_merge_pos_dist <- n_distinct(raw_bim_merge_pos$pos)
+
+```
+
+There are many more overlapping when join by chromosome and position:
+
++ rows in merge: `r count_raw_bim_merge_pos`
++ distinct positions in merge: `r count_raw_bim_merge_pos_dist`
+
+How many of these also have the same allele 1 and allele 2 (in order)?
+
+```{r}
+count_raw_bim_merge_pos_a_match <-
+  nrow(raw_bim_merge_pos %>% dplyr::filter(a1_t == a1_d & a2_t == a2_d))
+```
+
+`r count_raw_bim_merge_pos_a_match` rows have the same allele 1 and allele
+2 - the vast majority but not all. 
+
+The increase in overlap when mapping by position instead of RSID is partially
+driven by non-RSID variant names in DAISY:
+
+```{r}
+head(raw_bim_merge_pos %>% dplyr::filter(id_t != id_d))
+```
+
+Increase also due to the duplicate positions in DAISY with different variant
+names (so the join wasn't one-to-one):
+
+```{r}
+raw_bim_d_pos_dup_list <- raw_bim_d %>%
+  dplyr::filter(duplicated(pos))
+raw_bim_d_pos_dups <- raw_bim_d %>%
+  dplyr::filter(pos %in% raw_bim_d_pos_dup_list$pos)
+
+raw_bim_d_pos_dups_a_check <- raw_bim_d_pos_dups %>%
+  group_by(pos) %>%
+  summarize(a1_count = n_distinct(a1),
+            a2_count = n_distinct(a2))
+count_raw_bim_d_pos_dups_a_same <- sum(
+  raw_bim_d_pos_dups_a_check$a1_count == 1 &
+    raw_bim_d_pos_dups_a_check$a2_count == 1)
+
+head(raw_bim_d_pos_dups)
+
+```
+
+There are `r nrow(raw_bim_d_pos_dups)` rows with variants with duplicate
+positions in the raw DAISY data. Of these rows,
+`r count_raw_bim_d_pos_dups_a_same` have the same ref and alt as well. 
+
+**Venn Diagram:**
+
+*To note: numbers don't exactly add up to totals due to duplicate positions*
+*present in both datasets.*
+
+```{r}
+raw_bim_t <- raw_bim_t %>%
+  dplyr::mutate(chrpos = paste0(chr, ":", pos))
+raw_bim_d <- raw_bim_d %>%
+  dplyr::mutate(chrpos = paste0(chr, ":", pos))
+
+ggvenn(x <- list("TEDDY chr:pos" = raw_bim_t$chrpos, "DAISY chr:pos" = raw_bim_d$chrpos),
+       c("TEDDY chr:pos", "DAISY chr:pos"), auto_scale = T)
+```
+
+## **Compare Variant MAF**
+
+### **All Variants**
+
+First, calculate MAF in PLINK2:
+
+```{zsh, eval = F}
+# Run once, then reload results
+plink2 --bfile Maternal_Protection/raw/TEDDYarrays_v2/additional_data/Norris_SNP_exome_masked \
+  --freq --nonfounders \
+  --out Maternal_Protection/data/genetics/teddy/exome/Norris_SNP_exome_masked_freq
+
+plink2 --bfile DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/clean/daisyexome \
+  --freq --nonfounders \
+  --out DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/clean/daisyexome_freq
+
+```
+
+Show correlation plot of MAF for all variants:
+
+```{r fig.show='hold', out.width='50%'}
+# Need to map position informatio from ID for each study
+raw_maf_t <- inner_join(raw_maf_t, raw_bim_t, by = c("ID" = "id"))
+raw_maf_d <- inner_join(raw_maf_d, raw_bim_d, by = c("ID" = "id"))
+
+raw_bim_maf_merge_pos <- inner_join(raw_maf_t, raw_maf_d, by = c("chr", "pos"),
+                                suffix = c("_t", "_d"))
+
+ggplot(raw_bim_maf_merge_pos %>% dplyr::filter(chr != 6), aes(ALT_FREQS_t, ALT_FREQS_d)) +
+  geom_point() +
+  xlim(0,1) + 
+  ylim(0,1) +
+  coord_fixed() +
+  labs(title = "All Chr Except Chr6")
+
+ggplot(raw_bim_maf_merge_pos %>% dplyr::filter(chr == 6), aes(ALT_FREQS_t, ALT_FREQS_d)) +
+  geom_point() +
+  xlim(0,1) + 
+  ylim(0,1) +
+  coord_fixed() +
+  labs(title = "Chr6 Only")
+```
+
+*To note: DAISY's hard cutoff at 0.5 likely indicates used of a PLINK1.9*
+*command run without --keep-allele-order.*
+
+On chromosome 6, seems like there are a lot of variants with very low frequency
+in TEDDY that have higher frequency in DAISY. Does that mean anything for us?
+
+### **Common Variants**
+
+Defining common variants as those with MAF > 5% in either study.
+
+```{r}
+raw_bim_maf_merge_pos_filt <- raw_bim_maf_merge_pos %>%
+  dplyr::filter(ALT_FREQS_t >= 0.05 | ALT_FREQS_d >= 0.05)
+count_raw_bim_maf_merge_pos_filt <- nrow(raw_bim_maf_merge_pos_filt)
+```
+
+This reduces variant list from `r count_raw_bim_merge_pos` to
+`r count_raw_bim_maf_merge_pos_filt`.
+
+Make density plot of the MAF difference (TEDDY - DAISY):
+
+```{r fig.show='hold', out.width='50%'}
+raw_bim_maf_merge_pos_filt <- raw_bim_maf_merge_pos_filt %>%
+  dplyr::mutate(maf_diff = ALT_FREQS_t - ALT_FREQS_d)
+
+ggplot(raw_bim_maf_merge_pos_filt %>% dplyr::filter(chr != 6), aes(x = maf_diff)) +
+  geom_density() +
+  labs(title = "All Chr Except Chr6")
+
+ggplot(raw_bim_maf_merge_pos_filt %>% dplyr::filter(chr == 6), aes(x = maf_diff)) +
+  geom_density() +
+  labs(title = "Chr6 Only")
+
+```
+
+Density plot maybe not best visualization, but shows that there is little
+overall difference between the studies.
+
+## **Compare Overlap with GRS2 SNPs**
+
+Even though it was imputed data for both studies that was/will be used to
+calculate the GRS2, want to see what the overlap of unimputed SNPs is for both
+studies, especially since saw additional typed SNPs found in DAISY that weren't
+found in TEDDY.
+
+### **Map by RSID**
+
+*To note: the map is in hg38, so this check will only map by RSID.*
+
+```{r}
+map_tk_raw_bim_t <- left_join(map_tk %>% dplyr::select(COMPONENT, RSID),
+                              raw_bim_t %>% dplyr::select(id, chrpos, a1, a2),
+                              by = c("RSID" = "id"))
+map_tk_raw_bim_d <- left_join(map_tk %>% dplyr::select(COMPONENT, RSID),
+                              raw_bim_d %>% dplyr::select(id, chrpos, a1, a2),
+                              by = c("RSID" = "id"))
+map_tk_raw_merge <- inner_join(map_tk_raw_bim_t, map_tk_raw_bim_d,
+                               by = c("COMPONENT", "RSID"),
+                               suffix = c("_t", "_d"))
+
+head(map_tk_raw_merge, n = 100)
+```
+
+Even with the DAISY data having less consistent RSID naming, mapping by RSID
+for DAISY has `r sum(!is.na(map_tk_raw_bim_d$chrpos))` overlapping SNPs while
+TEDDY only has `r sum(!is.na(map_tk_raw_bim_t$chrpos))`. DAISY also has 3 of the
+HLA-DQ SNPs present, while TEDDY only has 1; 2 of the HLA SNPs while TEDDY has 1.
+
+This explains the different genotyped SNPs in the TOPMed imputation results
+that I saw present in DAISY but absent in TEDDY when trying to calculate th
+GRS2. Also discussed with Randi this paper calculating risk scores including
+the GRS2 in TEDDY (PMID 32770166)[https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7556983/]
+which could explain why TEDDY is missing the HLA-DQ SNP tags. See supplemental
+Table 7 for list of HLA-DQ SNPs excluded from the calculation due to the TEDDY
+study inclusion criteria.
+
+### **Map by hg19 Position**
+
+First, going to use biomaRt to convert RSIDs from GRS2 file to hg19 chr:pos.
+Then, re-map the above SNPs and see if more matches are found.
+
+*To show table, arbitrarily removing one entry for those variants that map*
+*twice due to duplicate positions.*
+
+```{r}
+# Get mart for hg19
+mart <- useMart("ENSEMBL_MART_SNP", dataset = "hsapiens_snp", host = 'https://grch37.ensembl.org')
+
+# Define your SNPs of interest
+map_tk <- map_tk %>%
+  dplyr::mutate(chr = gsub(":.+$", "", POSITION_BRAVO),
+                pos = gsub("^.+:", "", POSITION_BRAVO))
+snps <- map_tk$RSID
+# Shouldn't search chr:pos as well since using hg19 mart but only have chr:pos
+# in hg38. Just do chr, and if lose any RSIDs will check those by hand
+chr <- map_tk$chr
+# pos <- map_tk$pos
+
+# Query to retrieve nearby genes for the SNP
+result <- getBM(
+  attributes = c(
+    "refsnp_id",
+    "chr_name",
+    "chrom_start",
+    "chrom_end",
+    "allele"),
+  filters = list(
+    snp_filter = snps,
+    chr_name = chr),
+  mart = mart)
+
+# Have a lot of additional matches. Filter first by chromosome
+result <- result %>%
+  dplyr::rename(pos_hg19 = chrom_start) %>%
+  dplyr::select(-chrom_end)
+
+# n_distinct(result$refsnp_id)  # 67, got result for all!
+
+map_tk_hg19 <- inner_join(
+  map_tk %>% dplyr::select(-chr, -pos), result,
+  by = c("RSID" = "refsnp_id"))
+
+# Finally, join with data
+map_tk_hg19_raw_bim_t <- left_join(
+  map_tk_hg19 %>% dplyr::select(COMPONENT, RSID, chr_name, pos_hg19),
+  raw_bim_t %>% dplyr::select(id, chr, pos, a1, a2,),
+  by = c("pos_hg19" = "pos"))
+map_tk_hg19_raw_bim_d <- left_join(
+  map_tk_hg19 %>% dplyr::select(COMPONENT, RSID, chr_name, pos_hg19),
+  raw_bim_d %>% dplyr::select(id, chr, pos, a1, a2),
+  by = c("pos_hg19" = "pos"))
+map_tk_hg19_raw_merge <- inner_join(
+  map_tk_hg19_raw_bim_t,
+  map_tk_hg19_raw_bim_d,
+  by = c("COMPONENT", "RSID"),
+  suffix = c("_t", "_d"))
+
+map_tk_hg19_raw_merge_no_dups <- map_tk_hg19_raw_merge %>%
+  dplyr::filter(!duplicated(pos_hg19_d))
+
+head(map_tk_hg19_raw_merge_no_dups, n = 100)
+```
+
+No additional HLA-DQ or HLA SNPs matched in either dataset. However, looks like
+multiple DAISY "exm" IDs matched in non-HLA. Matching by hg19 position, DAISY
+has `r sum(!is.na(map_tk_hg19_raw_merge_no_dups$id_d))` overlapping SNPs while
+TEDDY has the same amount as mapped by RSID:
+`r sum(!is.na(map_tk_hg19_raw_merge_no_dups$id_t))`
+
+Again, in this subset of SNPs that are on the GRS2,  many of the "exm" DAISY
+variants also have RSID named variants at the same position. Since our TOPMed
+imputation pipeline removes duplicates, we likely don't need to do anything,
+but Randi may reach out to DAISY about it.
+
+```{r}
+d_dups <- map_tk_hg19_raw_bim_d %>% dplyr::filter(duplicated(pos_hg19))
+```
+
+Do the duplicate entries have the same MAF?
+
+```{r}
+raw_maf_d %>% dplyr::filter(pos %in% d_dups$pos_hg19)
+```
+
+Yes, except for position 1610551 on chr20 that is slightly different.
+
+### **Compare Variant MAF for GRS2 SNPs Mapped by hg19 Position**
+
+*To note: for this comparison, arbitrarily removing one of the position*
+*duplicates since frequencies nearly identical.*
+
+```{r fig.show='hold', out.width='50%'}
+# Add MAF to merge
+temp1 <- left_join(
+  map_tk_hg19_raw_merge_no_dups %>% dplyr::select(COMPONENT, RSID, chr_name_t, id_t),
+  raw_maf_t %>% dplyr::select(ID, ALT_FREQS, REF, ALT),
+  by = c("id_t" = "ID"))
+temp2 <- left_join(
+  map_tk_hg19_raw_merge_no_dups %>% dplyr::select(COMPONENT, RSID, chr_name_d, id_d),
+  raw_maf_d %>% dplyr::select(ID, ALT_FREQS, REF, ALT),
+  by = c("id_d" = "ID"))
+  
+map_tk_hg19_raw_merge_mod <- inner_join(
+  temp1, temp2, by = c("COMPONENT", "RSID"), suffix = c("_t", "_d"))
+
+ggplot(map_tk_hg19_raw_merge_mod %>% dplyr::filter(chr_name_t != 6), aes(ALT_FREQS_t, ALT_FREQS_d)) +
+  geom_point() +
+  xlim(0,1) + 
+  ylim(0,1) +
+  coord_fixed() +
+  labs(title = "All Chr Except Chr6")
+
+ggplot(map_tk_hg19_raw_merge_mod %>% dplyr::filter(chr_name_t == 6), aes(ALT_FREQS_t, ALT_FREQS_d)) +
+  geom_point() +
+  xlim(0,1) + 
+  ylim(0,1) +
+  coord_fixed() +
+  labs(title = "Chr6 Only")
+```
+
+# **2. Compare TOPMed Imputed Data**
+
+*Still TODO.*
+
+# **Session Info**
+
+```{r session_info}
+sessionInfo()
+```

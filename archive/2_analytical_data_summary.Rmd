@@ -1,0 +1,346 @@
+---
+title: "Analytical Data Summary"
+author: "NV, Updated by SDS"
+date: "Last compiled on `r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: kable
+    code_folding: hide
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding,
+  output_dir = paste0(Sys.getenv("RKJCOLLAB"), "/Maternal_Protection/reports/risk_scores")) })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(
+  root.dir = paste0(Sys.getenv("RKJCOLLAB"))) #setting up pathway
+
+library(tidyverse)
+library(table1)
+library(ggpubr)
+library(haven)
+library(dplyr)
+library(tidyr)
+library(janitor)
+library(ggplot2)
+library(knitr)
+library(khroma)
+
+```
+
+# **Load Data**
+
+
+```{r, message = F}
+# Read in pheno files
+### DAISY
+pheno_daisy_all <- readRDS(
+  "Maternal_Protection/data/daisy/famhist_prs/pheno_all_ia.rds")  # pheno for hypoth 1
+# d_all_t1d <- readRDS(
+#   "Maternal_Protection/data/daisy/famhist_prs/pheno_all_t1d.rds")
+# d_all_prog <- readRDS(
+#   "Maternal_Protection/data/daisy/famhist_prs/pheno_all_prog.rds")
+pheno_daisy_ctrls <- readRDS(
+  "Maternal_Protection/data/daisy/famhist_prs/pheno_ctrls_ia.rds")  # pheno for hypoth 1
+# d_ctrls_t1d <- readRDS(
+#   "Maternal_Protection/data/daisy/famhist_prs/pheno_ctrls_t1d.rds")
+# d_ctrls_prog <- readRDS(
+#   "Maternal_Protection/data/daisy/famhist_prs/pheno_ctrls_prog.rds")
+
+### TEDDY
+pheno_teddy_all <- readRDS(
+  "Maternal_Protection/data/teddy/famhist_prs/pheno_all.rds")  # pheno for hypoth 1
+# t_all_prog <- readRDS(
+#   "Maternal_Protection/data/teddy/famhist_prs/pheno_all_prog.rds")
+pheno_teddy_ctrls <- readRDS(
+  "Maternal_Protection/data/teddy/famhist_prs/pheno_ctrls_ia.rds")
+# t_ctrls_t1d <- readRDS(
+#   "Maternal_Protection/data/teddy/famhist_prs/pheno_ctrls_t1d.rds")
+# t_ctrls_prog <- readRDS(
+#   "Maternal_Protection/data/teddy/famhist_prs/pheno_ctrls_prog.rds")
+
+# Read GRS2x score file (61SNPs)
+grs2x_61<- read.csv(
+  "DAISY/genetics/daisy_ask_genetics/risk_scores/data/grs2x/tm_r3_imp/hwe_in_all/score_results_61_geno.csv")
+
+# Pheno files with HLA group information not included in analytical pheno files
+hla_daisy <- readRDS(
+  "DAISY/snapshots_of_data/deidentified-snapshots-RDS/deid-casedef_daisy07172024.rds") %>%
+  dplyr::select(ID, HLAGRP)
+hla_teddy <- sas7bdat::read.sas7bdat(
+  "Immunogenetics_T1D/raw/teddy_r01/2025-09-17/rj_immuno_all_demo_masked_v2.sas7bdat") %>%
+  dplyr::select(RJohnson_Immuno_anc_MaskID, hla_category)
+
+# Poster analysis files
+poster_daisy <- readRDS(
+  "Maternal_Protection/data/daisy/risk_score_analysis/pheno_ia_with_grs2_sd_eur_dr_filt_fdr_4level.rds")
+
+```
+
+# **Table 1s**
+### **DAISY**
+
+```{r}
+
+# Combine datasets and add Group column
+pheno_daisy <- bind_rows(
+  pheno_daisy_all %>% mutate(Group = "All"),
+  pheno_daisy_ctrls %>% mutate(Group = "Controls"))
+
+# Set variable labels
+label(pheno_daisy$GRS2x) <- "GRS2x Mean(SD)[Min,Max]"
+label(pheno_daisy$IA) <- "IA Case, N (%)"
+label(pheno_daisy$T1D) <- "T1D Case, N (%)"
+label(pheno_daisy$sex) <- "Sex, N (%)"
+label(pheno_daisy$fdr_4level) <- "FDR, N (%)"
+
+# Create table
+table1(~ GRS2x + IA + T1D + sex + fdr_4level | Group,
+       data = pheno_daisy,
+       overall = FALSE)
+
+
+```
+
+
+### **TEDDY**
+
+```{r}
+
+# Combine datasets and add group column
+pheno_teddy <- bind_rows(
+  pheno_teddy_all %>% mutate(Group = "All"),
+  pheno_teddy_ctrls %>% mutate(Group = "Controls"))
+
+
+# Set variable labels
+label(pheno_teddy$GRS2x) <- "GRS2x Mean(SD)[Min,Max]"
+label(pheno_teddy$IA) <- "IA Case, N (%)"
+label(pheno_teddy$T1D) <- "T1D Case,N (%)"
+label(pheno_teddy$sex) <- "Sex,N (%)"
+label(pheno_teddy$fdr_4level) <- "FDR, N (%)"
+label(pheno_teddy$IA) <- "IA Case, N (%)"
+label(pheno_teddy$T1D) <- "T1D Case, N (%)"
+
+
+# Create table without Total, showing only Yes for IA/T1D
+table1(~ GRS2x + IA + T1D + sex + fdr_4level | Group,
+       data = pheno_teddy,
+       overall = FALSE)
+```
+
+
+
+# **Box plots**
+
+```{r}
+###For 61SNPs GRS2x plots
+pheno_daisy_all <- pheno_daisy_all %>%
+  inner_join(hla_daisy, by = c("ID"))
+pheno_daisy_ctrls <- pheno_daisy_ctrls %>%
+  inner_join(hla_daisy, by = c("ID"))
+
+# Join grs2x_61 to pheno_daisy_all by IID
+pheno_daisy_all_61 <- pheno_daisy_all %>%
+  dplyr::select(ID, fdr_4level, HLAGRP) %>%
+  left_join(
+    grs2x_61 %>% dplyr::mutate(ID = gsub("^.+_", "", IID)),
+    by = "ID") %>%
+  rename(GRS2x = t1dgrs2.luckett25_total)
+
+# Join grs2x_61 to pheno_daisy_ctrls by IID
+pheno_daisy_ctrls_61 <- pheno_daisy_ctrls %>%
+  dplyr::select(ID, fdr_4level, HLAGRP) %>%
+  left_join(
+    grs2x_61 %>% dplyr::mutate(ID = gsub("^.+_", "", IID)),
+    by = "ID") %>%
+  rename(GRS2x = t1dgrs2.luckett25_total)
+
+# Common min/max across all DAISY datasets(67 and 61SNPs)
+common_min <- floor(min(
+  pheno_daisy_all$GRS2x, pheno_daisy_ctrls$GRS2x,
+  pheno_daisy_all_61$GRS2x, pheno_daisy_ctrls_61$GRS2x,
+  poster_daisy$GRS2, na.rm = TRUE))
+common_max <- ceiling(max(
+  pheno_daisy_all$GRS2x, pheno_daisy_ctrls$GRS2x,
+  pheno_daisy_all_61$GRS2x, pheno_daisy_ctrls_61$GRS2x,
+  poster_daisy$GRS2, na.rm = TRUE))
+
+```
+
+### **DAISY (TM-R3 GRS2x, 67 SNPs)**
+
+```{r fig.show='hold', out.width='50%'}
+
+#plot
+ggplot(pheno_daisy_all, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-All",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+ggplot(pheno_daisy_ctrls, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-Control",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+```
+
+GRS2x score is highest in siblings when compared to all other FDRs in
+DAISY-ALL(Cases+control), and in case of only DAISY-control, GRS2x for none and
+sibilings are on similar range.
+
+
+### **DAISY (TM-R3 GRS2x, 61 SNPs)**
+
+```{r fig.show='hold', out.width='50%'}
+
+#plot
+ggplot(pheno_daisy_all_61, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-All(61SNPs)",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+ggplot(pheno_daisy_ctrls_61, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-Control(61SNPs)",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+```
+
+Comparing GRS2x scores with 67SNPs and 61SNPs in DAISY  for ALL vs control
+group, the pattern of distribution looks similar but grs2x score is higher in
+case of 67 SNPs (which explain the weight contributed by 6SNPs).
+
+### **DAISY (TM-R3 GRS2x, 67 SNPs, DR3/3, 3/4, 4/4, & 4/X)**
+
+```{r fig.show='hold', out.width='50%'}
+
+pheno_daisy_all_filt <- pheno_daisy_all %>%
+  dplyr::filter(HLAGRP == "DR3/3" | HLAGRP == "DR3/4" | HLAGRP == "DR4/4" | HLAGRP == "DR4/X")
+pheno_daisy_ctrls_filt <- pheno_daisy_ctrls %>%
+  dplyr::filter(HLAGRP == "DR3/3" | HLAGRP == "DR3/4" | HLAGRP == "DR4/4" | HLAGRP == "DR4/X")
+
+ggplot(pheno_daisy_all_filt, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-All",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+ggplot(pheno_daisy_ctrls_filt, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-Control",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+```
+
+
+### **DAISY (TM-R3 GRS2x, 61 SNPs, DR3/3, 3/4, 4/4, & 4/X)**
+
+
+```{r fig.show='hold', out.width='50%'}
+
+pheno_daisy_all_61_filt <- pheno_daisy_all_61 %>%
+  dplyr::filter(HLAGRP == "DR3/3" | HLAGRP == "DR3/4" | HLAGRP == "DR4/4" | HLAGRP == "DR4/X")
+pheno_daisy_ctrls_61_filt <- pheno_daisy_ctrls_61 %>%
+  dplyr::filter(HLAGRP == "DR3/3" | HLAGRP == "DR3/4" | HLAGRP == "DR4/4" | HLAGRP == "DR4/X")
+
+ggplot(pheno_daisy_all_61_filt, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-All(61 SNPs)",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+ggplot(pheno_daisy_ctrls_61_filt, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-Control(61 SNPs)",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+```
+
+
+
+
+
+### **DAISY (Poster, 1000G GRS2, 61 SNPs, DR3/3, 3/4, 4/4, & 4/X)**
+
+
+```{r, fig.show='hold', out.width='50%'}
+
+ggplot(poster_daisy, aes(x = fdr_4level, y = GRS2, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "DAISY-All(61 SNPs)",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+```
+
+
+
+### **TEDDY**
+
+
+```{r fig.show='hold', out.width='50%'}
+
+ggplot(pheno_teddy_all, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "TEDDY-All",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+ggplot(pheno_teddy_ctrls, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_boxplot(alpha = 0.5, varwidth = TRUE) +
+  labs(title = "TEDDY-Control",
+       x = "FDR") + 
+  theme_bw() +
+  scale_y_continuous(breaks = seq(common_min, common_max, by = 2), limits = c(common_min, common_max)) +
+  stat_summary(fun.data = function(x) data.frame(y = common_min, label = length(x)), 
+               geom = "text")
+
+```
+
+
+
+# **Session Info**
+
+```{r session_info}
+sessionInfo()
+```

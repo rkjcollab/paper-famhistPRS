@@ -1,0 +1,35 @@
+#!/bin/bash
+
+#SBATCH --nodes=1
+#SBATCH --partition=amilan
+#SBATCH --ntasks=12
+#SBATCH --job-name="k_anc_t"
+#SBATCH -o "/scratch/alpine/sslack@xsede.org/maternal_protection/risk_scores/king_ancestry/teddy/job_4.1_get_king_ancestry.out"
+#SBATCH -e "/scratch/alpine/sslack@xsede.org/maternal_protection/risk_scores/king_ancestry/teddy/job_4.1_get_king_ancestry.err"
+#SBATCH --account=amc-general
+#SBATCH --time=01:00:00
+
+# TO NOTE: as of 7/2/24, script had to be run interactively with sinteractive
+
+ml anaconda
+conda activate king_anc_r3.6  # TO NOTE: R version needs to be 3.6
+
+# Set inputs - DAISY
+study_data="${RKJCOLLAB}/DAISY/genetics/daisy_ask_genetics/daisyask_exome_array/clean/daisyexome_study_ids"
+work_dir="${RKJCOLLAB}/Maternal_Protection/data/daisy/famhist_prs/king_anc"
+
+# Set inputs - TEDDY
+# study_data="/scratch/alpine/sslack@xsede.org/maternal_protection/genetics/Norris_SNP_exome_masked"
+# work_dir
+
+# Set inputs - same for both
+ref_data="/Users/slacksa/temp_data/king_ancestry/KGref"
+out_prefix="king_anc"
+
+# Set wd so output in correct folder
+cd "$work_dir"
+
+bash /home/sslack@xsede.org/repos/explore_matprot/risk_scores/4.1_get_king_ancestry.sh \
+	"$study" "$study_data" "$ref_data" "$out_prefix" \
+	> "job_4.1_get_king_ancestry.out" \
+	2> "job_4.1_get_king_ancestry.err"
