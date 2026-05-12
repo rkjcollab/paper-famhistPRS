@@ -91,11 +91,11 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
   knots <- NULL
   boundary <- NULL
 
-  if (type == "spline" & !is.na(tt_spec$knots) & !is.na(tt_spec$df)) {
+  if (type == "spline" && !is.na(n_knots) && !is.na(df)) {
     exit("For spline, can only specify either tt_spec$knots or tt_spec$df.")
   }
 
-  if (type == "spline" & !is.na(n_knots)) {
+  if (type == "spline" && !is.na(n_knots)) {
     # Set spline knots based on quantiles in cases
     pheno_case <- pheno[pheno[[outcome]] == 1, ]
 
@@ -117,7 +117,7 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
     boundary <- range(pheno[[time]])
   }
 
-  if (type == "spline" & !is.na(df)) {
+  if (type == "spline" && !is.na(df)) {
     t_ref <- pheno[[time]]
     s_ref <- splines::ns(t_ref, df = df)
     
@@ -173,27 +173,27 @@ mod_coxph_tt <- function(
       "+ tt(", tt_spec$var, ")"))
   
   # Get time-transform object
-  if (!is.na(tt_spec$knots) & !is.na(tt_spec$df)) {
+  knots <- if (is.null(tt_spec$knots)) NA else tt_spec$knots
+  df <- if (is.null(tt_spec$df)) NA else tt_spec$df
+  if (!is.na(knots) && !is.na(df)) {
     exit("Can only specify either tt_spec$knots or tt_spec$df.")
   }
-  if (!is.na(tt_spec$knots)) {
-    message("Specifying number knots with pre-specified quantiles.")
-    tt_obj <- build_tt(
-      tt_spec$type,
-      pheno,
-      time,
-      outcome,
-      n_knots = tt_spec$knots)
-  } else if (!is.na(tt_spec$df)) {
-    message("Specifying knots with ns() parameter df.")
-    tt_obj <- build_tt(
-      tt_spec$type,
-      pheno,
-      time,
-      outcome,
-      df = tt_spec$df)
+  tt_obj <- build_tt(
+    type = tt_spec$type,
+    pheno = pheno,
+    time = time,
+    outcome = outcome,
+    n_knots = knots,
+    df = df)
+  if (tt_spec$type == "spline") {
+    if (!is.na(knots)) {
+      message("Using spline with ", knots, " knots (quantile-based).")
+    } else if (!is.na(df)) {
+      message("Using spline with df = ", df, ".")
+    }
+  } else {
+    message("Using ", tt_spec$type, " time transform.")
   }
-
   
   # Run model
   mod <- coxph(

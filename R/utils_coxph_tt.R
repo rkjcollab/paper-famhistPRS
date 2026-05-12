@@ -175,3 +175,20 @@ plot_tt_hr <- function(
 }
 
 
+show_cox_zph <- function(mod) {
+  mod_cox_zph <- cox.zph(mod)
+  print(mod_cox_zph)
+  
+  mod_vars <- grep("GLOBAL", rownames(mod_cox_zph$table), invert = T, value = T)
+  
+  for (var in mod_vars) {
+    print(ggcoxzph(mod_cox_zph, var = c(var)))
+  }
+  
+  # Return just p-values and columns
+  table <- as.matrix(mod_cox_zph$table)
+  p <- as.data.frame(t(table[, "p"]))
+  return(p)
+}
+
+

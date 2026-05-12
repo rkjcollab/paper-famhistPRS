@@ -25,7 +25,16 @@ study_specs <- list(
     # Outputs
     intermed_out_dir = paste0(base_dir, "/Maternal_Protection/data/teddy/famhist_prs"),
     result_out_dir = paste0(base_dir, "/Maternal_Protection/data/results/famhist_prs"),
-    report_out_dir = paste0(base_dir, "/Maternal_Protection/reports/famhist_prs")
+    report_out_dir = paste0(base_dir, "/Maternal_Protection/reports/famhist_prs"),
+    
+    # Settings for survival model in script 03
+    surv_def = list(
+      IA = list(time = "fupIA", event = "IA"),
+      T1D = list(time = "fupT1D", event = "T1D"),
+      T1D_prog = list(time = "fupT1D_prog", event = "T1D")),
+    surv_covs = list(
+      IA = c("fdr_4level", "PC1", "PC2", "sex", "cc"),
+      T1D = c("fdr_4level", "PC1", "PC2", "sex", "cc"),
+      T1D_prog = c("fdr_4level", "PC1", "PC2", "sex", "cc", "fupIA", "mAA_at_IA"))
   )
 )
-

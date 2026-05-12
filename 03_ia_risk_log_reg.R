@@ -17,10 +17,8 @@ library(survival)
 library(doParallel)
 library(splines)
 
+devtools::load_all()
 source(here("config.R"))
-source(here("R/study_specs.R"))
-source(here("R/mod_coxme.R"))
-source(here("R/mod_coxph.R"))
 
 # TO NOTE: change this step's specific settings here, all other settings in
 # config.R and study_specs.R
@@ -37,23 +35,14 @@ engine <- "coxme"  # coxme, coxph, or coxph_tt
 #   knots = 5
 # )
 
-# Study specs, unchanged between runs
-study_specs$teddy$pheno_surv_path <- list(
-  IA = paste0(study_specs$teddy$intermed_out_dir, "/pheno_",
-              config$subset, "_ia", config$dr_suffix, ".rds"),
-  T1D = paste0(study_specs$teddy$intermed_out_dir, "/pheno_",
-               config$subset, "_t1d", config$dr_suffix, ".rds"),
-  T1D_prog = paste0(study_specs$teddy$intermed_out_dir, "/pheno_",
-                    config$subset, "_prog", config$dr_suffix, ".rds"))
-study_specs$teddy$surv_def <- list(
-  IA_surv_def = list(time = "fupIA", event = "IA"),
-  T1D_surv_def = list(time = "fupT1D", event = "T1D"),
-  T1D_prog_surv_def = list(time = "fupT1D_prog", event = "T1D"))
-#TODO: how to specify cluster(FID) as extract covariate when coxph
-study_specs$teddy$surv_covs <- list(
-  IA = c("fdr_4level", "PC1", "PC2", "sex", "cc"),
-  T1D = c("fdr_4level", "PC1", "PC2", "sex", "cc"),
-  T1D_prog = c("fdr_4level", "PC1", "PC2", "sex", "cc", "fupIA", "mAA_at_IA"))
+# Derived pheno paths, not direclty edited
+pheno_surv_path <- list(
+  IA = paste0(
+    study_specs[[study]]$intermed_out_dir, "/pheno_", config$subset, "_ia", config$dr_suffix, ".rds"),
+  T1D = paste0(
+    study_specs[[study]]$intermed_out_dir, "/pheno_", config$subset, "_t1d", config$dr_suffix, ".rds"),
+  T1D_prog = paste0(
+    study_specs[[study]]$intermed_out_dir, "/pheno_", config$subset, "_prog", config$dr_suffix, ".rds"))
 
 # Derived labels, not directly edited
 dr_suffix <- ifelse(config$dr_filt == "yes", "_dr_filt", "")
@@ -75,27 +64,6 @@ fitters <- list(
   coxme = mod_coxme)
 
 
-# Model helper -----------------------------------------------------------------
-
-run_model <- function(engine, study, pheno, event, time, covs,
-                      fdr_var, fdr_ref, kinship = NULL, tt_spec = NULL) {
-  
-  message(paste0("Running base ", engine, " model for ", study, " & ", model, "."))
-  
-  if (engine == "coxph") {
-    mod_coxph(study, pheno, event, time, covs, fdr_var, fdr_ref)
-    
-  } else if (engine == "coxph_tt") {
-    mod_coxph_tt(study, pheno, event, time, covs, fdr_var, fdr_ref, tt_spec)
-    
-  } else if (engine == "coxme") {
-    mod_coxme(study, pheno, kinship, event, time, covs, fdr_var, fdr_ref)
-    
-  } else {
-    stop("Unknown engine")
-  }
-}
-
 # Run models -------------------------------------------------------------------
 
 cl <- makeCluster(3)
@@ -116,19 +84,15 @@ results <- foreach(
     subset <- config$subset
     
     # Get survival variables for current model
-    surv_def <- specs$surv_def[[paste0(model, "_surv_def")]]
-    pheno <- specs$pheno_surv_path[[model]]
+    surv_def <- specs$surv_def[[model]]
+    pheno <- pheno_surv_path[[model]]
     event <- surv_def$event
     time  <- surv_def$time
     covs <- specs$surv_covs[[model]]
     
     result_base <- run_model(
-      engine,
-      study, pheno, event, time, covs,
-      fdr_var, fdr_ref,
-      kinship = kinship,
-      tt_spec = tt_spec
-    )
+      engine, model, study, pheno, event, time, covs, fdr_var, fdr_ref,
+      kinship = kinship, tt_spec = tt_spec)
     base_row <- result_base$result_df
     base_row$term = NA
     
@@ -149,12 +113,8 @@ results <- foreach(
       covs_term <- c(covs, term)
       
       result_term_tmp <- run_model(
-        engine,
-        study, pheno, event, time, covs_term,
-        fdr_var, fdr_ref,
-        kinship = kinship,
-        tt_spec = tt_spec
-      )
+        engine, study, pheno, event, time, covs_term, fdr_var, fdr_ref,
+        kinship = kinship,tt_spec = tt_spec)
       
       result_term <- result_term_tmp$result_df
       result_term$term <- term
