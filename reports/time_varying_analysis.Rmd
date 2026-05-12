@@ -22,10 +22,8 @@ knit: |
 
 ```{r setup, include=FALSE}
 library(here)
+devtools::load_all()
 source(here("config.R"))
-source(here("R/study_specs.R"))
-source(here("set_paper_colors.R"))
-source(here("R/utils_coxph_tt.R"))
 
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
@@ -204,118 +202,8 @@ prog_merge <- read_csv("coxph_T1D_prog_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
 
 
 #####  pheno files -------------------------------------------------------------
-ia <- readRDS(paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_ia.rds"))
-
-```
-
-# **Functions**
-
-```{r}
-show_cox_zph <- function(mod) {
-  mod_cox_zph <- cox.zph(mod)
-  print(mod_cox_zph)
-  
-  mod_vars <- grep("GLOBAL", rownames(mod_cox_zph$table), invert = T, value = T)
-  
-  for (var in mod_vars) {
-    print(ggcoxzph(mod_cox_zph, var = c(var)))
-  }
-  
-  # Return just p-values and columns
-  table <- as.matrix(mod_cox_zph$table)
-  p <- as.data.frame(t(table[, "p"]))
-  return(p)
-}
-
-# data <- m2_dad
-# ref <- "dad"
-# term <- "GRS2x"
-make_h2_forest_plot <- function(data, ref) {
-  
-  fdr_all <- c("dad", "mom", "sib", "none")
-  fdr <- setdiff(fdr_all, ref)
-  
-  cols_to_select <- c(
-    "study", "model", "outcome", "model_group",
-    paste0("estimate_fdr_", fdr),
-    paste0("conf.low_fdr_", fdr),
-    paste0("conf.high_fdr_", fdr))
-  
-  data_plot <- data %>%
-    select(all_of(cols_to_select)) %>%
-    rename(model_type = model) %>%
-    pivot_longer(
-      cols = matches("estimate_|conf\\.low_|conf\\.high_"),
-      names_to = c(".value", "term"),
-      names_pattern = "(estimate|conf\\.low|conf\\.high)_(.*)") %>%
-    mutate(term = recode(
-      term,
-      fdr_mom = "Mother",
-      fdr_sib = "Sibling",
-      fdr_dad = "Father",
-      fdr_none = "None")) %>%
-    mutate(
-      or = exp(estimate),
-      or_conf_low = exp(conf.low),
-      or_conf_high = exp(conf.high)) %>%
-    mutate(term = factor(term, levels = rev(fdr_order))) %>%
-    mutate(outcome = case_when(
-      outcome == "case_t1dprog" ~ "Progression",
-      outcome == "ia" ~ "IA",
-      outcome == "persist_conf_ab" ~ "IA",
-      outcome == "t1d" ~ "T1D")) %>%
-    mutate(outcome = factor(outcome, levels = outcome_order)) %>%
-    mutate(
-      model_type_ind = ifelse(grepl("GRS2x", model_type), "With GRS2x", "Without GRS2x"),
-      model_type_ind = factor(model_type_ind, levels = c("With GRS2x", "Without GRS2x"))
-    )
-  
-  plot <- ggplot(
-    data_plot,
-    aes(x = term, y = or, ymin = or_conf_low, ymax = or_conf_high,
-        color = term, fill = term, alpha = model_type_ind)
-  ) + 
-    geom_linerange(position = position_dodge(width = 0.5), show.legend = FALSE, size = 0.8) +
-    geom_hline(yintercept = 1, lty = 2) +
-    geom_point(size = 2.5, shape = 21, colour = "white", stroke = 0.5,
-               position = position_dodge(width = 0.5)) +
-    scale_color_manual(values = c(
-      "Father" = color_fdr_dad,
-      "Mother" = color_fdr_mom,
-      "Sibling" = color_fdr_sib,
-      "None" = color_fdr_none),
-      guide = "none") +
-    scale_fill_manual(values = c(
-      "Father" = color_fdr_dad,
-      "Mother" = color_fdr_mom,
-      "Sibling" = color_fdr_sib,
-      "None" = color_fdr_none),
-      guide = "none") +
-    scale_alpha_manual(
-      values = c("Without GRS2x" = 0.4, "With GRS2x" = 1)) +
-    guides(
-      alpha = guide_legend(
-        reverse = T,
-        override.aes = list(
-          shape = 21,
-          size  = 3,
-          fill  = "grey50",
-          color = "grey50"))) +
-    coord_flip() +
-    theme_bw() +
-    labs(
-      x = "",
-      y = "Hazard Ratio"
-    ) +
-    theme(
-      legend.position = "bottom",
-      strip.background = element_rect(fill = "white", color = "black"),
-      axis.text.y = element_text(angle = 90, hjust = 0.5)
-    ) +
-    facet_wrap(~ model_group, ncol = 1, strip.position = "left")
-  
-  return(plot)
-}
+pheno_ia_path <- paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_ia.rds")
+pheno_ia <- readRDS(pheno_ia_path)
 
 ```
 
@@ -659,10 +547,51 @@ protective. Want to internally verify this by doing a left-censored analysis:
 if start follow up at age 6, expect to see no protective effect.
 
 ```{r}
-ia_cens <- ia %>%
-  dplyr::filter(fupIA >= 5)
+# Prep data
+pheno_ia_cens <- pheno_ia %>%
+  dplyr::filter(fupIA >= 6)
+# Write out at same path with _cens_age6
+pheno_ia_cens_path <- paste0(gsub("\\.rds", "", pheno_ia_path), "_cens_age6.rds")
+saveRDS(pheno_ia_cens, pheno_ia_cens_path)
+
+# Prep model options, running without GRS2x
+study <- "teddy"
+model <- "IA"
+engine <- "coxph_tt"
+tt_spec <- list(
+  type = "linear",  # "log", "linear", "spline"
+  var = "fdr_4level")
+specs <- study_specs[[study]]
+fdr_var <- config$fdr_var
+fdr_ref <- config$fdr_ref
+
+surv_def <- specs$surv_def[[model]]
+pheno <- pheno_ia_cens_path
+event <- surv_def$event
+time <- surv_def$time
+covs <- c(specs$surv_covs[[model]], "cluster(FID)")
+
+res_ia_cens <- run_model(
+  engine, model, study, pheno, event, time, covs, fdr_var, fdr_ref, tt_spec = tt_spec)
+
+# Save using same structure as script 03
+saveRDS(
+  res_ia_cens$model_obj,
+  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all_cens_age6.rds")
+write_csv(
+  res_ia_cens$result_df,
+  "coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_GRS2x_teddy_all_cens_age6.csv")
+
 ```
 
+```{r}
+make_h2_forest_plot(
+  data = res_ia_cens$result_df %>%
+    dplyr::mutate(model = "IA") %>%
+    dplyr::mutate(model_group = "IA"),
+  ref = "dad")
+
+```
 
 
 # **Session Info**
