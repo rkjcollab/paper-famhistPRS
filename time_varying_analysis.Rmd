@@ -8,15 +8,28 @@ output:
     toc_float: true
     df_print: kable
     code_folding: hide
-knit: (function(inputFile, encoding) {
-  rmarkdown::render(inputFile, encoding = encoding,
-  output_dir = paste0(Sys.getenv("RKJCOLLAB"), "/Maternal_Protection/reports/risk_scores")) })
+knit: |
+  (function(inputFile, encoding) {
+    library(here)
+    source(here("R", "study_specs.R"))
+    rmarkdown::render(
+      inputFile,
+      encoding = encoding,
+      output_dir = study_specs$teddy$report_out_dir
+    )
+  })
 ---
 
 ```{r setup, include=FALSE}
+library(here)
+source(here("config.R"))
+source(here("R/study_specs.R"))
+source(here("set_paper_colors.R"))
+source(here("R/utils_coxph_tt.R"))
+
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
-  root.dir = paste0(Sys.getenv("RKJCOLLAB"))) #setting up pathway
+  root.dir = study_specs$teddy$result_out_dir)
 
 library(tidyverse)
 library(conflicted)
@@ -30,122 +43,168 @@ library(survminer)
 
 MatProt PRS time-varying analysis. Specifically focused on checking proportional
 hazards assumption in models for primary variable of interest (fdr_4level), as
-well as potentially running a model that acounts for time-varying hazard and
-understanding mom vs. dad during following.
+well as potentially running a model that accounts for time-varying hazard and
+allows us to understand hazard over time in FDR Mom vs. FDR Dad during followup
+time. Proportional hazards violation does not invalidate the model, but instead
+changes the interpretation to average instead of instantaneous.
 
-Current approach:
+Approach:
 
-+ cox.zph(coxme) - cox.zph doesn't check random effects for hazards
-+ addition of interaction fdr_4level:log(time-to-event)
-  + does not converge for T1D progression outcome
-  
-Other options:
+1. Use cox.zph to check proportional hazards assumption on original primary
+  coxme() models with kinship. Note that cox.zph doesn't check random effects
+  for hazards.
+2. For models where fdr_4level violates proportional hazards assumption (IA)
+  add time-varying component for fdr_4level to model. 
+  + Because doing this in  coxme() framework using an interaction between
+    fdr_4level and time caused models not to converge, primary analysis was
+    shifted to using coxph() with a cluster on family ID.
+  + Also evaluated strata() for other violating covariates in some models, but
+    ultimately decided not to include, keeping simpler models for parsimony.
 
-+ *TODO: add from slides!*
+**Final decision:** final MatProt PRS paper primary models will account for
+time-varying hazard in fdr_4level using a linear transform of time, based on the
+cox.zph residual plots and model AIC after exploration of many time transform
+options.
 
+*More details:*
 
-**More details:**
-
-From cox.zph documentation:
-
-Random effects terms such a frailty or random effects in a coxme model are not
-checked for proportional hazards, rather they are treated as a fixed offset in
-model.
-
-*TODO: not sure what this means for us? Will see what it looks like anyway -*
-*Kirk says this should be okay.*
+From cox.zph documentation: Random effects terms such a frailty or random
+effects in a coxme() model are not checked for proportional hazards, rather they
+are treated as a fixed offset in model.
 
 
 # **Load Data**
 
 ```{r}
-# Model objects - coxme --------------------------------------------------------
-#TODO: switch all these paths after re-run
-mod_ia <- readRDS(
-  "Maternal_Protection/data/results/famhist_prs/model_IA_fupIA_fdr_4level-PC1-PC2-sex-cc.rds")
-mod_ia_grs2x <- readRDS(
-  "Maternal_Protection/data/results/famhist_prs/model_IA_fupIA_fdr_4level-PC1-PC2-sex-cc-GRS2x.rds")
+fdr_order <- c("Father", "Mother", "Sibling", "None")
+outcome_order <- c("IA", "Progression", "T1D")
 
-mod_t1d <- readRDS(
-  "Maternal_Protection/data/results/famhist_prs/model_T1D_fupT1D_fdr_4level-PC1-PC2-sex-cc.rds")
-mod_t1d_grs2x <- readRDS(
-  "Maternal_Protection/data/results/famhist_prs/model_T1D_fupT1D_fdr_4level-PC1-PC2-sex-cc-GRS2x.rds")
+#####  coxme model objects -----------------------------------------------------
+### IA
+mc_ia <- readRDS(
+  "model_objects/coxme_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc_teddy_all.rds")
+mc_ia_g <- readRDS(
+  "model_objects/coxme_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-GRS2x_teddy_all.rds")
 
-mod_t1dprog <- readRDS(
-  "Maternal_Protection/data/results/famhist_prs/coxme_T1D_prog_fdr_dad_fdr_4level-PC1-PC2-sex-cc-fupIA-mAA_at_IA.rds")
-mod_t1dprog_grs2x <- readRDS(
-  "Maternal_Protection/data/results/famhist_prs/coxme_T1D_prog_fdr_dad_fdr_4level-PC1-PC2-sex-cc-fupIA-mAA_at_IA-GRS2x.rds")
+### T1D
+mc_t1d <- readRDS(
+  "model_objects/coxme_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc_teddy_all.rds")
+mc_t1d_g <- readRDS(
+  "model_objects/coxme_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-GRS2x_teddy_all.rds")
 
-# Model objects - coxph with tt(fdr_4level) linear ----------------------------
-#TODO: this currently doesn't differentiate which transform or which FDR was
-# reference! Will fix once finalize what want to look at
-
-# coxph_tt <- c("IA", "T1D", "T1D_prog")
-# coxph_tt_files <- unlist(lapply(coxph_tt, function(x) {
-#   list.files(
-#     path = "Maternal_Protection/data/results/famhist_prs/",
-#     pattern = paste0(
-#       "coxph_tt_linear_fdr_4level_",
-#       x
-#     ),
-#     full.names = TRUE
-#   )
-# }))
-# 
-# coxph_tt_files <- unique(grep("rds", coxph_tt_files, value = T))
-# 
-# # Read files
-# coxph_tt_mod <- lapply(unique(grep("rds", coxph_tt_files, value = T)), readRDS)
-# names(coxph_tt_mod) <- sapply(coxph_tt_files, function(file) {
-#   base_name <- sub(
-#     ".*coxph_tt_linear_fdr_4level_(.*?)_fdr.*",
-#     "\\1",
-#     file)
-#   suffix <- if (grepl("GRS2x", file)) "_GRS2x" else ""
-#   paste0(base_name, suffix)
-# })
+### T1D prog
+mc_t1dprog <- readRDS(
+  "model_objects/coxme_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-fupIA-mAA_at_IA_teddy_all.rds")
+mc_t1dprog_g <- readRDS(
+  "model_objects/coxme_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-fupIA-mAA_at_IA-GRS2x_teddy_all.rds")
 
 
-# Model objects - coxph with tt(fdr_4level) log ----------------------------
-#TODO: this currently doesn't differentiate which transform or which FDR was
-# reference! Will fix once finalize what want to look at
+#####  coxph model objects -----------------------------------------------------
+### IA
+# No time-varying
+m_ia <- readRDS(
+  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_g <- readRDS(
+  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+# Linear time transform
+m_ia_lin <- readRDS(
+  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_lin_g <- readRDS(
+  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+# Log time transform
+m_ia_log <- readRDS(
+  "model_objects/coxph_tt_log_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_log_g <- readRDS(
+  "model_objects/coxph_tt_log_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+# Spline time transform, with knots informed by PMID 25883970
+m_ia_spline_3 <- readRDS(
+  "model_objects/coxph_tt_spline_3knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_spline_3_g <- readRDS(
+  "model_objects/coxph_tt_spline_3knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+# Spline time transform, with knots informed by PMID 25883970
+m_ia_spline_5 <- readRDS(
+  "model_objects/coxph_tt_spline_5knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_spline_5_g <- readRDS(
+  "model_objects/coxph_tt_spline_5knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+# Spline time transform, with knots auto-determined (equally spaced quantiles)
+m_ia_spline_d2 <- readRDS(
+  "model_objects/coxph_tt_spline_2df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_spline_d2_g <- readRDS(
+  "model_objects/coxph_tt_spline_2df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+m_ia_spline_d3 <- readRDS(
+  "model_objects/coxph_tt_spline_3df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_spline_d3_g <- readRDS(
+  "model_objects/coxph_tt_spline_3df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+m_ia_spline_d4 <- readRDS(
+  "model_objects/coxph_tt_spline_4df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_spline_d4_g <- readRDS(
+  "model_objects/coxph_tt_spline_4df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+m_ia_spline_d6 <- readRDS(
+  "model_objects/coxph_tt_spline_6df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_spline_d6_g <- readRDS(
+  "model_objects/coxph_tt_spline_6df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+# Spline time transform, with single knot chosen based on knowledge of data
+# and prior literature
+m_ia_spline_1 <- readRDS(
+  "model_objects/coxph_tt_spline_1knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_ia_spline_1_g <- readRDS(
+  "model_objects/coxph_tt_spline_1knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
 
-coxph_tt <- c("IA", "T1D", "T1D_prog")
-coxph_tt_files <- unlist(lapply(coxph_tt, function(x) {
-  list.files(
-    path = "Maternal_Protection/data/results/famhist_prs/",
-    pattern = paste0(
-      "coxph_tt_log_fdr_4level_",
-      x
-    ),
-    full.names = TRUE
-  )
-}))
+### T1D
+m_t1d <- readRDS(
+  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m_t1d_g <- readRDS(
+  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+m_t1d_strat <- readRDS(
+  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-strata(sex)-strata(cc)-cluster(FID)_teddy_all.rds")
+m_t1d_g_strat <- readRDS(
+  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-strata(sex)-strata(cc)-cluster(FID)-GRS2x_teddy_all.rds")
 
-coxph_tt_files <- unique(grep("rds", coxph_tt_files, value = T))
-
-# Read files
-coxph_tt_mod <- lapply(unique(grep("rds", coxph_tt_files, value = T)), readRDS)
-names(coxph_tt_mod) <- sapply(coxph_tt_files, function(file) {
-  base_name <- sub(
-    ".*coxph_tt_log_fdr_4level_(.*?)_fdr.*",
-    "\\1",
-    file)
-  suffix <- if (grepl("GRS2x", file)) "_GRS2x" else ""
-  paste0(base_name, suffix)
-})
+### T1D prog
+m_t1dprog <- readRDS(
+  "model_objects/coxph_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-fupIA-mAA_at_IA_teddy_all.rds")
+m_t1dprog_g <- readRDS(
+  "model_objects/coxph_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-fupIA-mAA_at_IA-GRS2x_teddy_all.rds")
 
 
-# Pheno files ------------------------------------------------------------------
-pheno_ia <- readRDS(
-  "Maternal_Protection/data/teddy/famhist_prs/pheno_all_ia.rds")
+#####  model result files ------------------------------------------------------
+
+# Only loading subset of files compared to all models above, used to compare
+# model effect estimates across versions
+
+### IA
+ia <- read_csv("coxph_IA_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
+  dplyr::mutate(model = paste0(outcome, ifelse(is.na(term), "", paste0("-", term))))
+ia_lin <- read_csv("coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
+  dplyr::mutate(model = paste0(outcome, ifelse(is.na(term), "", paste0("-", term)), "-lin"))
+ia_log <- read_csv("coxph_tt_log_fdr_4level_IA_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
+  dplyr::mutate(model = paste0(outcome, ifelse(is.na(term), "", paste0("-", term)), "-log"))
+ia_spline_3knots <- read_csv("coxph_tt_spline_3knots_fdr_4level_IA_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
+  dplyr::mutate(model = paste0(outcome, ifelse(is.na(term), "", paste0("-", term)), "-spline-3knots"))
+ia_merge <- bind_rows(
+  ia, ia_lin, ia_log, ia_spline_3knots) %>%
+  dplyr::relocate(model) %>%
+  distinct(across(-model), .keep_all = TRUE)
+
+### T1D
+t1d <- read_csv("coxph_T1D_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
+  dplyr::mutate(model = paste0(outcome, ifelse(is.na(term), "", paste0("-", term))))
+t1d_strat <- read_csv("coxph_T1D_fdr_dad_ref_GRS2x_strata_teddy_all.csv") %>%
+  dplyr::mutate(
+    model = paste0(
+      outcome, ifelse(is.na(term), "", paste0("-", term)), "-strat"))
+t1d_merge <- bind_rows(
+  t1d, t1d_strat) %>%
+  dplyr::relocate(model) %>%
+  distinct(across(-model), .keep_all = TRUE)
+
+### T1D Prog
+prog_merge <- read_csv("coxph_T1D_prog_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
+  dplyr::mutate(model = paste0(outcome, ifelse(is.na(term), "", paste0("-", term))))
 
 
-# tt results linear and log dad as reference
-linear <- read_csv(
-  "Maternal_Protection/data/results/famhist_prs/coxph_tt_linear_fdr_4level_IA_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_all.csv")
-log <- read_csv(
-  "Maternal_Protection/data/results/famhist_prs/coxph_tt_log_fdr_4level_IA_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_all.csv")
+#####  pheno files -------------------------------------------------------------
+ia <- readRDS(paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_ia.rds"))
 
 ```
 
@@ -168,20 +227,111 @@ show_cox_zph <- function(mod) {
   return(p)
 }
 
+# data <- m2_dad
+# ref <- "dad"
+# term <- "GRS2x"
+make_h2_forest_plot <- function(data, ref) {
+  
+  fdr_all <- c("dad", "mom", "sib", "none")
+  fdr <- setdiff(fdr_all, ref)
+  
+  cols_to_select <- c(
+    "study", "model", "outcome", "model_group",
+    paste0("estimate_fdr_", fdr),
+    paste0("conf.low_fdr_", fdr),
+    paste0("conf.high_fdr_", fdr))
+  
+  data_plot <- data %>%
+    select(all_of(cols_to_select)) %>%
+    rename(model_type = model) %>%
+    pivot_longer(
+      cols = matches("estimate_|conf\\.low_|conf\\.high_"),
+      names_to = c(".value", "term"),
+      names_pattern = "(estimate|conf\\.low|conf\\.high)_(.*)") %>%
+    mutate(term = recode(
+      term,
+      fdr_mom = "Mother",
+      fdr_sib = "Sibling",
+      fdr_dad = "Father",
+      fdr_none = "None")) %>%
+    mutate(
+      or = exp(estimate),
+      or_conf_low = exp(conf.low),
+      or_conf_high = exp(conf.high)) %>%
+    mutate(term = factor(term, levels = rev(fdr_order))) %>%
+    mutate(outcome = case_when(
+      outcome == "case_t1dprog" ~ "Progression",
+      outcome == "ia" ~ "IA",
+      outcome == "persist_conf_ab" ~ "IA",
+      outcome == "t1d" ~ "T1D")) %>%
+    mutate(outcome = factor(outcome, levels = outcome_order)) %>%
+    mutate(
+      model_type_ind = ifelse(grepl("GRS2x", model_type), "With GRS2x", "Without GRS2x"),
+      model_type_ind = factor(model_type_ind, levels = c("With GRS2x", "Without GRS2x"))
+    )
+  
+  plot <- ggplot(
+    data_plot,
+    aes(x = term, y = or, ymin = or_conf_low, ymax = or_conf_high,
+        color = term, fill = term, alpha = model_type_ind)
+  ) + 
+    geom_linerange(position = position_dodge(width = 0.5), show.legend = FALSE, size = 0.8) +
+    geom_hline(yintercept = 1, lty = 2) +
+    geom_point(size = 2.5, shape = 21, colour = "white", stroke = 0.5,
+               position = position_dodge(width = 0.5)) +
+    scale_color_manual(values = c(
+      "Father" = color_fdr_dad,
+      "Mother" = color_fdr_mom,
+      "Sibling" = color_fdr_sib,
+      "None" = color_fdr_none),
+      guide = "none") +
+    scale_fill_manual(values = c(
+      "Father" = color_fdr_dad,
+      "Mother" = color_fdr_mom,
+      "Sibling" = color_fdr_sib,
+      "None" = color_fdr_none),
+      guide = "none") +
+    scale_alpha_manual(
+      values = c("Without GRS2x" = 0.4, "With GRS2x" = 1)) +
+    guides(
+      alpha = guide_legend(
+        reverse = T,
+        override.aes = list(
+          shape = 21,
+          size  = 3,
+          fill  = "grey50",
+          color = "grey50"))) +
+    coord_flip() +
+    theme_bw() +
+    labs(
+      x = "",
+      y = "Hazard Ratio"
+    ) +
+    theme(
+      legend.position = "bottom",
+      strip.background = element_rect(fill = "white", color = "black"),
+      axis.text.y = element_text(angle = 90, hjust = 0.5)
+    ) +
+    facet_wrap(~ model_group, ncol = 1, strip.position = "left")
+  
+  return(plot)
+}
+
 ```
 
 
 
-# **Summary cox.zph on coxme models**
+# **Summary PH Violations coxme Models**
 
 ## **IA**
+
 
 ### **No GRS2x**
 
 
 ```{r out.width = '50%', fig.show = 'hold'}
 
-zph_ia <- show_cox_zph(mod_ia)
+zph_ia <- show_cox_zph(m_ia)
 
 ```
 
@@ -189,9 +339,64 @@ zph_ia <- show_cox_zph(mod_ia)
 
 ```{r out.width = '50%', fig.show = 'hold'}
 
-zph_ia_grs2x <- show_cox_zph(mod_ia_grs2x)
+zph_ia_g <- show_cox_zph(m_ia_g)
 
 ```
+
+### **Models with tt()**
+
+Can't run cox.zph on models with tt(). Instead, use AIC to compare.
+
+Would be better to do an Anova with LRT on the nested models, but can't do that
+because of the robust variance due to the cluster(FID) in the models. Instead
+compare all with AIC.
+
+Note that can't compare models with strata() to models without because a
+different partial likelihood is used (computed within strata).
+
+**Look at all, stacked so with/without GRS2x values together:**
+
+```{r}
+AIC(
+  m_ia, m_ia_g, m_ia_lin, m_ia_lin_g, m_ia_log, m_ia_log_g,
+  m_ia_spline_3, m_ia_spline_3_g, m_ia_spline_5, m_ia_spline_5_g,
+  m_ia_spline_d2, m_ia_spline_d2_g, m_ia_spline_d3, m_ia_spline_d3_g,
+  m_ia_spline_d4, m_ia_spline_d4_g, m_ia_spline_d6, m_ia_spline_d6_g)
+```
+
+```{r}
+AIC(m_ia_spline_1, m_ia_spline_1_g)
+```
+
+
+
+In general, GRS2x improves model fit and linear time has slightly lower AIC
+than log time.
+
+**Look at all models without GRS2x:**
+
+```{r}
+AIC(m_ia, m_ia_lin, m_ia_log, m_ia_spline)
+```
+
+All have fairly similar AIC, best is linear, then log, then spline, then no
+time interaction with fdr_4level.
+
+**Look at all models with GRS2x:**
+
+```{r}
+AIC(m_ia_g, m_ia_lin_g, m_ia_log_g, m_ia_spline_g)
+```
+
+**Look at knot ages:**
+
+```{r}
+m_ia_spline_3$tt_meta$knots
+m_ia_spline_5$tt_meta$knots
+m_ia_spline_3$tt_meta$boundary
+
+```
+
 
 
 ## **T1D**
@@ -200,7 +405,7 @@ zph_ia_grs2x <- show_cox_zph(mod_ia_grs2x)
 
 ```{r out.width = '50%', fig.show = 'hold'}
 
-zph_t1d <- show_cox_zph(mod_t1d)
+zph_t1d <- show_cox_zph(m_t1d)
 
 ```
 
@@ -209,10 +414,30 @@ zph_t1d <- show_cox_zph(mod_t1d)
 
 ```{r out.width = '50%', fig.show = 'hold'}
 
-zph_t1d_grs2x <- show_cox_zph(mod_t1d_grs2x)
+zph_t1d_g <- show_cox_zph(m_t1d_g)
 
 ```
 
+
+### **No GRS2x, With Strata**
+
+```{r out.width = '50%', fig.show = 'hold'}
+
+zph_t1d_strat <- show_cox_zph(m_t1d_strat)
+
+```
+
+
+### **With GRS2x, With Strata**
+
+```{r out.width = '50%', fig.show = 'hold'}
+
+zph_t1d_g_strat <- show_cox_zph(m_t1d_g_strat)
+
+```
+
+
+Adding the strata resolve PH violation in PC1. 
 
 
 ## **T1D Progression**
@@ -221,7 +446,7 @@ zph_t1d_grs2x <- show_cox_zph(mod_t1d_grs2x)
 
 ```{r out.width = '50%', fig.show = 'hold'}
 
-zph_t1dprog <- show_cox_zph(mod_t1dprog)
+zph_t1dprog <- show_cox_zph(m_t1dprog)
 
 ```
 
@@ -229,7 +454,7 @@ zph_t1dprog <- show_cox_zph(mod_t1dprog)
 
 ```{r out.width = '50%', fig.show = 'hold'}
 
-zph_t1dprog_grs2x <- show_cox_zph(mod_t1dprog_grs2x)
+zph_t1dprog_g <- show_cox_zph(m_t1dprog_g)
 
 ```
 
@@ -239,329 +464,204 @@ zph_t1dprog_grs2x <- show_cox_zph(mod_t1dprog_grs2x)
 
 result <- bind_rows(
   zph_ia %>% dplyr::mutate(model = "IA"),
-  zph_ia_grs2x %>% dplyr::mutate(model = "IA-GRS2x"),
+  zph_ia_g %>% dplyr::mutate(model = "IA-GRS2x"),
   zph_t1d %>% dplyr::mutate(model = "T1D"),
-  zph_t1d_grs2x %>% dplyr::mutate(model = "T1D-GRS2x"),
+  zph_t1d_strat %>% dplyr::mutate(model = "T1D-Strat"),
+  zph_t1d_g %>% dplyr::mutate(model = "T1D-GRS2x"),
+  zph_t1d_g_strat %>% dplyr::mutate(model = "T1D-GRS2x-Strat"),
   zph_t1dprog %>% dplyr::mutate(model = "T1Dprog"),
-  zph_t1dprog_grs2x %>% dplyr::mutate(model = "T1Dprog-GRS2x"),
+  zph_t1dprog_g %>% dplyr::mutate(model = "T1Dprog-GRS2x"),
 )
 
-result %>% relocate(model, GLOBAL)
+result <- result %>% relocate(model, GLOBAL)
+result
+
+write_tsv(result, "summary_coxzph.txt")
 
 ```
 
 
 
-# **Plot coxph models with tt(fdr_4level)**
+# **Main Outcomes Forest Plots of Model Versions**
 
-Based on code from Kirk.
-
-### Version for Dad as Reference
-
-#### **No GRS2x**
+### **IA**
 
 ```{r}
-mod <- coxph_tt_mod$IA
+ia_merge <- ia_merge %>%
+  dplyr::mutate(model = factor(model), levels = c(
+    "IA", "IA-GRS2x",
+    "IA-lin", "IA-GRS2x-lin",
+    "IA-log", "IA-GRS2x-log", 
+    "IA-spline-3knots", "IA-GRS2x-spline-3knots")) %>%
+  dplyr::mutate(model_group = case_when(
+    model == "IA" | model == "IA-GRS2x" ~ "IA",
+    model == "IA-lin" | model == "IA-GRS2x-lin" ~ "IA-lin",
+    model == "IA-log" | model == "IA-GRS2x-log" ~ "IA-log",
+    model == "IA-spline-3knots" | model == "IA-GRS2x-spline-3knots" ~ "IA-spline-3knots"
+  ))
 
-# Extract coefficients and variance-covariance matrix from stratified model
-coefs <- coef(mod)
-vcov_mat <- vcov(mod)
 
-# Create time sequence
-times <- c(0.5, 1, 2, 5, 10, 15)
-# times <- seq(0.5, 15, by = 0.1)
-
-# Function to calculate HR and CI at each time point
-calc_hr_ci <- function(beta_main, beta_tt, var_main, var_tt, cov_main_tt, times) {
-  log_hr <- beta_main + beta_tt * log(times)
-  se_log_hr <- sqrt(var_main + (log(times))^2 * var_tt + 2 * log(times) * cov_main_tt)
-  
-  data.frame(
-    time = times,
-    hr = exp(log_hr),
-    lower = exp(log_hr - 1.96 * se_log_hr),
-    upper = exp(log_hr + 1.96 * se_log_hr)
-  )
-}
-
-# None vs. Dad
-var_main <- "fdr_4levelNone"
-var_tt <- "tt(fdr_4level)None"
-none_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
+make_h2_forest_plot(
+  data = ia_merge,
+  ref = "dad"
 )
-none_hr$cohort <- "None vs Dad"
-
-# Mom vs. Dad
-var_main <- "fdr_4levelMom"
-var_tt <- "tt(fdr_4level)Mom"
-mom_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
-)
-mom_hr$cohort <- "Mom vs Dad"
-
-# Sib vs. Dad
-var_main <- "fdr_4levelSib"
-var_tt <- "tt(fdr_4level)Sib"
-sib_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
-)
-sib_hr$cohort <- "Sib vs Dad"
-
-# Combine and plot
-hr_data <- rbind(none_hr, mom_hr, sib_hr)
-
-ggplot(hr_data, aes(x = time, y = hr, color = cohort, fill = cohort)) +
-  geom_line(linewidth = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = NA) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
-  scale_y_log10(breaks = c(0.5, 1, 2, 4, 8, 16)) +
-  scale_x_continuous(breaks = c(0, 1, 2, 5, 10, 15)) +
-  labs(
-    x = "Follow-up Time (Years)",
-    y = "Islet Autoimmunity Hazard Ratio",
-    title = "Time-Varying IA Hazard Ratios for Birth Cohort Effects",
-    subtitle = "Reference: Dad",
-    caption = "Y-axis displayed on log scale",
-    color = "Comparison",
-    fill = "Comparison"
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "bottom",
-    panel.grid.minor = element_blank()
-  )
 ```
 
 
-
-
-
-#### **With GRS2x**
+### **T1D**
 
 ```{r}
-mod <- coxph_tt_mod$IA_GRS2x
+t1d_merge <- t1d_merge %>%
+  dplyr::mutate(model = factor(model), levels = c(
+    "T1D", "T1D-GRS2x",
+    "T1D-strat", "T1D-GRS2x-strat")) %>%
+  dplyr::mutate(model_group = case_when(
+    model == "T1D" | model == "T1D-GRS2x" ~ "T1D",
+    model == "T1D-strat" | model == "T1D-GRS2x-strat" ~ "T1D-strat"
+  ))
 
-# Extract coefficients and variance-covariance matrix from stratified model
-coefs <- coef(mod)
-vcov_mat <- vcov(mod)
 
-# Create time sequence
-times <- c(0.5, 1, 2, 5, 10, 15)
-# times <- seq(0.5, 15, by = 0.1)
-
-# Function to calculate HR and CI at each time point
-calc_hr_ci <- function(beta_main, beta_tt, var_main, var_tt, cov_main_tt, times) {
-  log_hr <- beta_main + beta_tt * log(times)
-  se_log_hr <- sqrt(var_main + (log(times))^2 * var_tt + 2 * log(times) * cov_main_tt)
-  
-  data.frame(
-    time = times,
-    hr = exp(log_hr),
-    lower = exp(log_hr - 1.96 * se_log_hr),
-    upper = exp(log_hr + 1.96 * se_log_hr)
-  )
-}
-
-# None vs. Dad
-var_main <- "fdr_4levelNone"
-var_tt <- "tt(fdr_4level)None"
-none_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
+make_h2_forest_plot(
+  data = t1d_merge,
+  ref = "dad"
 )
-none_hr$cohort <- "None vs Dad"
-
-# Mom vs. Dad
-var_main <- "fdr_4levelMom"
-var_tt <- "tt(fdr_4level)Mom"
-mom_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
-)
-mom_hr$cohort <- "Mom vs Dad"
-
-# Sib vs. Dad
-var_main <- "fdr_4levelSib"
-var_tt <- "tt(fdr_4level)Sib"
-sib_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
-)
-sib_hr$cohort <- "Sib vs Dad"
-
-# Combine and plot
-hr_data <- rbind(none_hr, mom_hr, sib_hr)
-
-ggplot(hr_data, aes(x = time, y = hr, color = cohort, fill = cohort)) +
-  geom_line(linewidth = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = NA) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
-  scale_y_log10(breaks = c(0.5, 1, 2, 4, 8, 16)) +
-  scale_x_continuous(breaks = c(0, 1, 2, 5, 10, 15)) +
-  labs(
-    x = "Follow-up Time (Years)",
-    y = "Islet Autoimmunity Hazard Ratio",
-    title = "Time-Varying IA Hazard Ratios for Birth Cohort Effects",
-    subtitle = "Reference: Dad",
-    caption = "Y-axis displayed on log scale",
-    color = "Comparison",
-    fill = "Comparison"
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "bottom",
-    panel.grid.minor = element_blank()
-  )
 ```
 
 
-
-
-
-
-### Version for None as Reference
+### **T1D Prog**
 
 ```{r}
-mod <- coxph_tt_mod$IA
+prog_merge <- prog_merge %>%
+  dplyr::mutate(model = factor(model), levels = c(
+    "T1D", "T1D-GRS2x")) %>%
+  dplyr::mutate(model_group = case_when(
+    model == "T1D" | model == "T1D-GRS2x" ~ "T1D",
+  ))
 
-# Extract coefficients and variance-covariance matrix from stratified model
-coefs <- coef(mod)
-vcov_mat <- vcov(mod)
 
-# Create time sequence
-times <- c(0.5, 1, 2, 5, 10, 15)
-# times <- seq(0.5, 15, by = 0.1)
-
-# Function to calculate HR and CI at each time point
-calc_hr_ci <- function(beta_main, beta_tt, var_main, var_tt, cov_main_tt, times) {
-  log_hr <- beta_main + beta_tt * log(times)
-  se_log_hr <- sqrt(var_main + (log(times))^2 * var_tt + 2 * log(times) * cov_main_tt)
-  
-  data.frame(
-    time = times,
-    hr = exp(log_hr),
-    lower = exp(log_hr - 1.96 * se_log_hr),
-    upper = exp(log_hr + 1.96 * se_log_hr)
-  )
-}
-
-# Dad vs. None
-var_main <- "fdr_4levelDad"
-var_tt <- "tt(fdr_4level)Dad"
-dad_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
+make_h2_forest_plot(
+  data = prog_merge,
+  ref = "dad"
 )
-dad_hr$cohort <- "Dad vs None"
+```
 
-# Mom vs. None
-var_main <- "fdr_4levelMom"
-var_tt <- "tt(fdr_4level)Mom"
-mom_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
-)
-mom_hr$cohort <- "Mom vs None"
+# **Plot IA Hazard Over Time**
 
-# Sib vs. None
-var_main <- "fdr_4levelSib"
-var_tt <- "tt(fdr_4level)Sib"
-sib_hr <- calc_hr_ci(
-  beta_main = coefs[var_main],
-  beta_tt = coefs[var_tt],
-  var_main = vcov_mat[var_main, var_main],
-  var_tt = vcov_mat[var_tt, var_tt],
-  cov_main_tt = vcov_mat[var_main, var_tt],
-  times = times
-)
-sib_hr$cohort <- "Sib vs None"
+Based on code originally from Kirk.
 
-# Combine and plot
-hr_data <- rbind(dad_hr, mom_hr, sib_hr)
+### **Linear**
 
-ggplot(hr_data, aes(x = time, y = hr, color = cohort, fill = cohort)) +
-  geom_line(linewidth = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = NA) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
-  scale_y_log10(breaks = c(0.5, 1, 2, 4, 8, 16)) +
-  scale_x_continuous(breaks = c(0, 1, 2, 5, 10, 15)) +
-  labs(
-    x = "Follow-up Time (Years)",
-    y = "Islet Autoimmunity Hazard Ratio",
-    title = "Time-Varying IA Hazard Ratios for Birth Cohort Effects",
-    subtitle = "Reference: Dad",
-    caption = "Y-axis displayed on log scale",
-    color = "Comparison",
-    fill = "Comparison"
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "bottom",
-    panel.grid.minor = element_blank()
-  )
+```{r}
+lin_tt <- get_tt_hr(
+  mod = m_ia_lin,
+  var = "fdr_4level",
+  levels = c("None", "Mom", "Sib"),
+  ref_label = "Dad",
+  time_transform = identity)
+
+plot_tt_hr(
+  data = lin_tt,
+  var = "fdr_4level",
+  ref_label = "Dad")
+
+```
+
+```{r}
+lin_g_tt <- get_tt_hr(
+  mod = m_ia_lin_g,
+  var = "fdr_4level",
+  levels = c("None", "Mom", "Sib"),
+  ref_label = "Dad",
+  time_transform = identity)
+
+plot_tt_hr(
+  data = lin_g_tt,
+  var = "fdr_4level",
+  ref_label = "Dad")
+```
+
+
+### **Log**
+
+```{r}
+log_tt <- get_tt_hr(
+  mod = m_ia_log,
+  var = "fdr_4level",
+  levels = c("None", "Mom", "Sib"),
+  ref_label = "Dad",
+  time_transform = log)
+
+plot_tt_hr(
+  data = log_tt,
+  var = "fdr_4level",
+  ref_label = "Dad")
+
+```
+
+```{r}
+log_g_tt <- get_tt_hr(
+  mod = m_ia_log_g,
+  var = "fdr_4level",
+  levels = c("None", "Mom", "Sib"),
+  ref_label = "Dad",
+  time_transform = log)
+
+plot_tt_hr(
+  data = log_g_tt,
+  var = "fdr_4level",
+  ref_label = "Dad")
 ```
 
 
 
+### **Spline**
 
-# **Quick summary linear vs log**
+*Current code only shows version with three pre-defined knots, but same*
+*plotting code can be used for all versions.*
 
-```{r, message = F}
+```{r}
+spline_tt <- get_tt_hr_spline(
+  mod = m_ia_spline_3,
+  var = "fdr_4level",
+  levels = c("None", "Mom", "Sib"),
+  ref_label = "Dad",
+  knots = m_ia_spline_3$tt_meta$knots,
+  boundary = m_ia_spline_3$tt_meta$boundary)
 
-merge <- full_join(
-  linear %>% dplyr::mutate(transform = "linear"),
-  log %>% dplyr::mutate(transform = "log")) %>%
-  dplyr::select(
-    transform, outcome, nobs, term, form, estimate_fdr_none, estimate_fdr_sib, estimate_fdr_mom,
-    p.value_fdr_none, p.value_fdr_mom, p.value_fdr_sib) %>%
-  pivot_longer(
-    cols = matches("estimate_|p.value_"),
-    names_to = c(".value", "fdr"),
-    names_pattern = "(estimate|p.value)_(.*)") %>%
-  dplyr::mutate(or = exp(estimate))
+plot_tt_hr(
+  data = spline_tt,
+  var = "fdr_4level",
+  ref_label = "Dad")
 
-merge
-write_tsv(merge, "Maternal_Protection/data/results/famhist_prs/TMP_coxph_tt_linear_log_summary.txt")
+```
+
+```{r}
+spline_tt_g <- get_tt_hr_spline(
+  mod = m_ia_spline_3_g,
+  var = "fdr_4level",
+  levels = c("None", "Mom", "Sib"),
+  ref_label = "Dad",
+  knots = m_ia_spline_3_g$tt_meta$knots,
+  boundary = m_ia_spline_3_g$tt_meta$boundary)
+
+plot_tt_hr(
+  data = spline_tt_g,
+  var = "fdr_4level",
+  ref_label = "Dad")
 
 ```
 
 
+# **Cross-Sectional Check**
+
+Used the above HRs over time to check the last age at which T1D mom was
+protective. Want to internally verify this by doing a left-censored analysis:
+if start follow up at age 6, expect to see no protective effect.
+
+```{r}
+ia_cens <- ia %>%
+  dplyr::filter(fupIA >= 5)
+```
 
 
 
@@ -571,4 +671,3 @@ write_tsv(merge, "Maternal_Protection/data/results/famhist_prs/TMP_coxph_tt_line
 sessionInfo()
 
 ```
-

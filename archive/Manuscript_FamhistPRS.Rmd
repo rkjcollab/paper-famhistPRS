@@ -8,29 +8,15 @@ output:
     toc_float: true
     df_print: kable
     code_folding: hide
-knit: |
-  (function(inputFile, encoding) {
-    library(here)
-    source(here("R", "study_specs.R"))
-    rmarkdown::render(
-      inputFile,
-      encoding = encoding,
-      output_dir = study_specs$teddy$report_out_dir
-    )
-  })
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding,
+  output_dir = paste0(Sys.getenv("RKJCOLLAB"), "/Maternal_Protection/reports/risk_scores")) })
 ---
 
 ```{r setup, include=FALSE}
-
-library(here)
-source("config.R")
-source(here("config.R"))
-source(here("R/study_specs.R"))
-source(here("set_paper_colors.R"))
-
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
-  root.dir = study_specs$teddy$result_out_dir)
+  root.dir = paste0(Sys.getenv("RKJCOLLAB"))) #setting up pathway
 
 library(tidyverse)
 library(table1)
@@ -51,10 +37,7 @@ library(kableExtra)
 
 ```
 
-# **Overview**
-
-This report generates all figures, tables, and text-referenced values for the
-MatProt PRS manuscript.
+# **Load Data**
 
 *TO NOTE:* previous versions of this report included both DAISY & TEDDY, as well
 as multiple data versions (HLA-DR filtering, FDR none as reference for modeling,
@@ -63,64 +46,90 @@ report has been cleaned up to only include the final version presented in the
 manuscript. The results for all are still saved at
 Maternal_Protection/data/results/famhist_prs.
 
-### Subset Genetic Input
-
-GRS2x variant selection and genotype subsetting were performed prior to analysis
-(see `scripts/extract_grs2x_variants.*`).
-
-*TODO: move this to somewhere else?*
-
-
-# **Load Data**
-
-
 ```{r, message = F}
+# Source manuscript colors
+source("/Users/slacksa/repos/explore_matprot/genetics/risk_scores/set_paper_colors.R")
 fdr_order <- c("Father", "Mother", "Sibling", "None")
 outcome_order <- c("IA", "Progression", "T1D")
 
-# From step 01 - read in pheno files
+# Read in pheno files
+t_fam <- read_delim(
+  "Immunogenetics_T1D/raw/teddy_r01/2025-03-05/OmicsDatasets/t1dexome_masked.fam",
+  col_names = c("FID", "IID", "PID", "MID", "SEX", "PHENO")) %>%
+  dplyr::select(FID, IID) %>%
+  dplyr::mutate(FID = as.character(FID),
+                IID = as.character(IID))
 t_all <- readRDS(
-  paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_ia.rds"))
-  # same as pheno_all_t1d.rds
+  "Maternal_Protection/data/teddy/famhist_prs/pheno_all_ia.rds")
+  # same as pheno_all_t1d.rds, pheno for hypoth 1
 t_all_prog <- readRDS(
-  paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_prog.rds"))
+  "Maternal_Protection/data/teddy/famhist_prs/pheno_all_prog.rds")
 t_ctrls_ia <- readRDS(
-  paste0(study_specs$teddy$intermed_out_dir, "/pheno_ctrls_ia.rds"))
+  "Maternal_Protection/data/teddy/famhist_prs/pheno_ctrls_ia.rds")
 
-# # From step 02 - read in hypoth 1 results
-# m1_dad <- read_csv(
-#   "Maternal_Protection/data/results/famhist_prs/lm_GRS2x_fdr_dad_ref_daisy_teddy_all.csv")
+# Read in hypoth 1 results
+m1_dad <- read_csv(
+  "Maternal_Protection/data/results/famhist_prs/lm_GRS2x_fdr_dad_ref_daisy_teddy_all.csv")
 
-# # From step 03 - read in hypoth 2 results
-# m2_dad <- read_csv(
-#   "Maternal_Protection/data/results/famhist_prs/lm_outcome_fdr_dad_ref_GRS2x_daisy_teddy_all.csv")
+# Read in hypoth 2 results
+m2_dad <- read_csv(
+  "Maternal_Protection/data/results/famhist_prs/lm_outcome_fdr_dad_ref_GRS2x_daisy_teddy_all.csv")
 
+# Get SNP list from GRS2x repo
+grs2x_snps <- read_xlsx(
+  "/Users/slacksa/repos/explore_matprot/genetics/risk_scores/PRSedm/snplists/grs2_version_snplists.xlsx",
+  sheet = "GRS2X_TOPMED_R3")
 
+# GRS2x TEDDY log
+grs2x_teddy <- fread(
+  "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results_with_imp_log_summary.txt")
 
+# TOPMed R3 information
+tmr3_teddy <- read_tsv(
+  "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x.pvar",
+  comment = "##")
 
-# # GRS2x TEDDY log
-# grs2x_teddy <- fread(
-#   "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results_with_imp_log_summary.txt")
-# 
-# # TOPMed R3 information
-# tmr3_teddy <- read_tsv(
-#   "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x.pvar",
-#   comment = "##")
-# 
-# # Read in male/female AFs
-# af_male <- read_delim(
-# "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_male.afreq")
-# af_female <- read_delim(
-# "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_female.afreq")
-# 
-# # Read in T1D Mom/Dad AFs
-# af_d <- read_delim(
-# "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_t1d_dad.afreq")
-# af_m <- read_delim(
-# "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_t1d_mom.afreq")
+# Read in male/female AFs
+af_male <- read_delim(
+"Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_male.afreq")
+af_female <- read_delim(
+"Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_female.afreq")
+
+# Read in T1D Mom/Dad AFs
+af_d <- read_delim(
+"Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_t1d_dad.afreq")
+af_m <- read_delim(
+"Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_t1d_mom.afreq")
 
 ```
 
+
+### Subset Genetic Input
+
+*This section only run once.*
+
+```{r, eval = F}
+grs2x_snps_id <- grs2x_snps %>%
+  dplyr::mutate(id = paste0(POSITION_HG38, ":", REF, ":", ALT)) %>%
+  dplyr::select(id)
+
+write_tsv(
+  grs2x_snps_id, "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/grs2x_snp_ids.txt",
+  col_names = F)
+```
+
+
+```{bash, eval = F}
+# Run once to subset PLINK2 files with all variants to just those included for
+# GRS2x
+cd Immunogenetics_T1D/genetics/teddy_r01
+
+plink2 --pfile imputation/tm_r3_imp/exome_chip/full_qc/imputed_clean_maf0_rsq0.3/chr_all_concat \
+  --extract risk_scores/grs2x/grs2x_snp_ids.txt \
+  --make-pgen \
+  --out risk_scores/grs2x/chr_all_concat_grs2x
+
+```
 
 
 # **Figure 1**
@@ -576,10 +585,9 @@ ggplot(t_all_t1d, aes(x=fdr_4level, y=fup_t1d)) +
 
 ```{r}
 # Combine datasets and add Group column
-pheno <- t_all_prog %>%
-  mutate(group = case_when(
-    #TODO: continue here!! ####################################
-  ))
+pheno_all<- bind_rows(
+  t_all %>% mutate(Group = "Cohort Analyses"),
+  t_all_prog %>% mutate(Group = "Progression Analysis"))
 
 # Set variable labels
 label(pheno_all$sex) <- "Sex, N (%)"
@@ -593,7 +601,7 @@ label(pheno_all$dr34) <- "DR3/4, N (%)"
 # Create the table
 t1 <- table1(
   ~ sex + fdr_4level + dr34 + GRS2x + mAA_at_ia + as.factor(persist_conf_ab) + as.factor(t1d) +
-    as.factor(case_t1dprog) | group,
+    as.factor(case_t1dprog) | Group,
   data = pheno_all, overall = FALSE)
 t1
 
@@ -948,3 +956,4 @@ write_csv(
 sessionInfo()
 
 ```
+

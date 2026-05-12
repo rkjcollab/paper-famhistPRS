@@ -99,17 +99,15 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
     # Set spline knots based on quantiles in cases
     pheno_case <- pheno[pheno[[outcome]] == 1, ]
 
-    # Set quantile options based on:
-      # PMID 25883970 for knots = 3 & 5
-      # knowledge of data/prior literature for knots = 1
-    if (n_knots == 1) {
-      # Single knot at age 5
+    # Set quantile options based on PMID 25883970
+    probs <- if (n_knots == 1) {
+      # TODO: temp try knot at age 5
       knots <- as.numeric(5)
     } else if (n_knots == 3) {
-      probs <- c(0.05, 0.5, 0.95)
+      c(0.05, 0.5, 0.95)
       knots <- as.numeric(quantile(pheno_case[[time]], probs = probs))
     } else if (n_knots == 5) {
-      probs <- c(0.05, 0.25, 0.5, 0.75, 0.95)
+      c(0.05, 0.25, 0.5, 0.75, 0.95)
       knots <- as.numeric(quantile(pheno_case[[time]], probs = probs))
     } else {
       stop("Current model only supports spline knots = 1, 3, or 5.")

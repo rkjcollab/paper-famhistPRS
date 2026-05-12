@@ -1,4 +1,4 @@
-# SDS 20241023, updated 20260429
+# SDS 20241023, pdated 20260429
 
 # Hypothesis is that if maternal protection is not explained by survival bias,
 # adding GRS2 to the model will NOT cause maternal protective effect to go away.
@@ -25,17 +25,17 @@ source(here("R/mod_coxph.R"))
 # TO NOTE: change this step's specific settings here, all other settings in
 # config.R and study_specs.R
 study <- config$studies[1]
-models <- c("IA", "T1D", "T1D_prog")  # "IA", "T1D", or "T1D_prog"
+models <- c("IA")  # "IA", "T1D", or "T1D_prog"
 terms <- c("GRS2x")  # c("Non_HLA", "GRS2x", "dr34")
-engine <- "coxme"  # coxme, coxph, or coxph_tt
+engine <- "coxph_tt"  # coxme, coxph, or coxph_tt
 
 # Required if engine = coxph_tt, can only include either "knots" or "df"
-# tt_spec <- list(
-#   type = "spline",  # "log", "linear", "spline"
-#   var = "fdr_4level",
-#   df = NA,
-#   knots = 5
-# )
+tt_spec <- list(
+  type = "spline",  # "log", "linear", "spline"
+  var = "fdr_4level",
+  df = NA,
+  knots = 1
+)
 
 # Study specs, unchanged between runs
 study_specs$teddy$pheno_surv_path <- list(
@@ -49,11 +49,10 @@ study_specs$teddy$surv_def <- list(
   IA_surv_def = list(time = "fupIA", event = "IA"),
   T1D_surv_def = list(time = "fupT1D", event = "T1D"),
   T1D_prog_surv_def = list(time = "fupT1D_prog", event = "T1D"))
-#TODO: how to specify cluster(FID) as extract covariate when coxph
 study_specs$teddy$surv_covs <- list(
-  IA = c("fdr_4level", "PC1", "PC2", "sex", "cc"),
-  T1D = c("fdr_4level", "PC1", "PC2", "sex", "cc"),
-  T1D_prog = c("fdr_4level", "PC1", "PC2", "sex", "cc", "fupIA", "mAA_at_IA"))
+  IA = c("fdr_4level", "PC1", "PC2", "sex", "cc", "cluster(FID)"),
+  T1D = c("fdr_4level", "PC1", "PC2", "sex", "cc", "cluster(FID)"),
+  T1D_prog = c("fdr_4level", "PC1", "PC2", "sex", "cc", "cluster(FID)", "fupIA", "mAA_at_IA"))
 
 # Derived labels, not directly edited
 dr_suffix <- ifelse(config$dr_filt == "yes", "_dr_filt", "")

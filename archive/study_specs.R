@@ -19,8 +19,6 @@ study_specs <- list(
       paste0(base_dir, "/Immunogenetics_T1D/genetics/teddy_r01/genesis_2/study_nhw_pcair.rds"),
     kinship_path =
       paste0(base_dir, "/Immunogenetics_T1D/genetics/teddy_r01/genesis_2/study_nhw_GRM.rds"),
-    plink_path =
-      paste0(base_dir, "/Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc/imputed_clean_maf0_rsq0.3/chr_all_concat"),
 
     # Outputs
     intermed_out_dir = paste0(base_dir, "/Maternal_Protection/data/teddy/famhist_prs"),
