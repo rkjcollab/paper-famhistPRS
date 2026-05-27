@@ -63,7 +63,7 @@ get_tt_hr_spline <- function(
     var,
     levels,
     ref_label,
-    times = seq(0, 16, 0.5),
+    times = seq(0, 15, 0.5),
     knots,
     boundary) {
   coefs <- coef(mod)
@@ -144,12 +144,12 @@ calc_hr_ci <- function(
     upper = exp(log_hr + 1.96 * se_log_hr))
 }
 
-
+#TODO: need to dedup with manuscript version
 plot_tt_hr <- function(
     data,
     var,
     ref_label,
-    times = seq(0, 16, 0.5)) {
+    times = seq(0, 15, 0.5)) {
   
   p <- ggplot(data, aes(x = time, y = hr, color = cohort, fill = cohort)) +
     geom_line(linewidth = 1) +
@@ -189,6 +189,28 @@ show_cox_zph <- function(mod) {
   table <- as.matrix(mod_cox_zph$table)
   p <- as.data.frame(t(table[, "p"]))
   return(p)
+}
+
+# Given input data used for model, get N individuals remaining at each time
+get_n_remain <- function(
+    data,
+    var,
+    time_var,
+    times = seq(0, 15, 0.5)) {
+  
+  expand.grid(
+    cohort = unique(data[[var]]),
+    time = times
+  ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      n_remain = sum(
+        data[[time_var]] >= time &
+          data[[var]] == cohort,
+        na.rm = TRUE
+      )
+    ) %>%
+    dplyr::ungroup()
 }
 
 

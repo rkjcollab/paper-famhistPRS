@@ -24,6 +24,8 @@
 
 # Setup ------------------------------------------------------------------------
 
+#TODO: need to update for split to two functions in utils_teddy.R
+
 library(here)
 
 source(here("config.R"))

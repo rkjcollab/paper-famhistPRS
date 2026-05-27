@@ -8,6 +8,7 @@ library(coxme)
 # fdr_ref <- specs[[study]]$fdr_ref
 
 # Note: pheno files must be set to have id = "ID"
+#' @export
 mod <- function(study, pheno, kinship, outcome, covs, fdr_var, fdr_ref) {
   
   # Read in pheno

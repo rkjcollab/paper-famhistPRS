@@ -12,10 +12,8 @@
 # Setup ------------------------------------------------------------------------
 
 library(here)
-
+devtools::load_all()
 source(here("config.R"))
-source(here("R/study_specs.R"))
-source(here("mod_lmekin.R"))
 
 # TO NOTE: change this step's specific settings here, all other settings in
 # config.R
@@ -54,7 +52,6 @@ run_model <- function(study, config) {
   
   # Save results
   write_csv(result, file = out_path)
-
 }
 
 # Run function -----------------------------------------------------------------

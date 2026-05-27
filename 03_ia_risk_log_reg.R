@@ -7,6 +7,9 @@
   # Base: IA/T1D ~ FDR + PCs + clinical center (TEDDY) + 1|kinship
   # Base + GRS2x as covariate
 
+#TODO: if keep interaction p-value in results, need to update file name to 
+# write out differently
+
 # Setup ------------------------------------------------------------------------
 
 library(here)
@@ -14,28 +17,32 @@ library(tidyverse)
 library(GMMAT)
 library(coxme)
 library(survival)
-library(doParallel)
 library(splines)
+library(car)
 
+# devtools::install()
+# library(famhistPRS)
 devtools::load_all()
 source(here("config.R"))
 
 # TO NOTE: change this step's specific settings here, all other settings in
 # config.R and study_specs.R
 study <- config$studies[1]
-models <- c("IA", "T1D", "T1D_prog")  # "IA", "T1D", or "T1D_prog"
+models <- c("IA")  # "IA", "T1D", "T1D_prog"
 terms <- c("GRS2x")  # c("Non_HLA", "GRS2x", "dr34")
-engine <- "coxme"  # coxme, coxph, or coxph_tt
+engine <- "coxph_tt"  # coxme, coxph, or coxph_tt
+wald_test <- "fdr_4level"  # optional term to run Wald test one
+  # TODO: needs to align with covs
 
 # Required if engine = coxph_tt, can only include either "knots" or "df"
-# tt_spec <- list(
-#   type = "spline",  # "log", "linear", "spline"
-#   var = "fdr_4level",
-#   df = NA,
-#   knots = 5
-# )
+tt_spec <- list(
+  type = "linear",  # "log", "linear", "spline"
+  var = "fdr_4level",
+  knots = NA,
+  df = NA
+)
 
-# Derived pheno paths, not direclty edited
+# Derived pheno paths, not directly edited
 pheno_surv_path <- list(
   IA = paste0(
     study_specs[[study]]$intermed_out_dir, "/pheno_", config$subset, "_ia", config$dr_suffix, ".rds"),
@@ -53,27 +60,16 @@ engine_label <- if (engine == "coxph_tt") {
           ifelse(!is.na(tt_spec$knots),
                  paste0(tt_spec$knots, "knots"),
                  paste0(tt_spec$df, "df")),
-          tt_spec$var, sep = "_"),
-    paste(engine, tt_spec$type, tt_spec$var, sep = "_"))
+          sep = "_"),
+    paste(engine, tt_spec$type, sep = "_"))
 } else {
   engine
 }
-fitters <- list(
-  coxph = mod_coxph,
-  coxph_tt = mod_coxph_tt,
-  coxme = mod_coxme)
 
 
 # Run models -------------------------------------------------------------------
 
-cl <- makeCluster(3)
-registerDoParallel(cl)
-
-results <- foreach(
-  model = models,
-  .combine = dplyr::bind_rows,
-  .packages = c("tidyverse", "GMMAT", "coxme", "survival", "splines")
-  ) %dopar% {
+results <- map_dfr(models, function(model) {
     # Get current study specs
     specs <- study_specs[[study]]
     
@@ -90,20 +86,26 @@ results <- foreach(
     time  <- surv_def$time
     covs <- specs$surv_covs[[model]]
     
+    # If subset == female/male, remove sex from covs
+    if (subset == "female" | subset == "male") {
+      covs <- grep("sex", covs, value = T, invert = T)
+    }
+    
     result_base <- run_model(
       engine, model, study, pheno, event, time, covs, fdr_var, fdr_ref,
-      kinship = kinship, tt_spec = tt_spec)
+      wald_test = wald_test, kinship = kinship, tt_spec = tt_spec)
     base_row <- result_base$result_df
     base_row$term = NA
     
     # Save model object
     base_mod <- result_base$model_obj
+    covs_mod <- attr(terms(base_mod), "term.labels")
     out_path_base_mod <- paste0(
       specs$result_out_dir, "/model_objects/",
       engine_label,
       "_", model,
       "_fdr_", tolower(fdr_ref), "_ref_",
-      paste(covs, collapse = "-"),
+      paste(covs_mod, collapse = "-"),
       dr_suffix, "_",
       study, "_",
       subset, ".rds")
@@ -113,20 +115,21 @@ results <- foreach(
       covs_term <- c(covs, term)
       
       result_term_tmp <- run_model(
-        engine, study, pheno, event, time, covs_term, fdr_var, fdr_ref,
-        kinship = kinship,tt_spec = tt_spec)
+        engine, model, study, pheno, event, time, covs_term, fdr_var, fdr_ref,
+        wald_test = wald_test, kinship = kinship,tt_spec = tt_spec)
       
       result_term <- result_term_tmp$result_df
       result_term$term <- term
         
       # Save term model
       term_mod <- result_term_tmp$model_obj
+      covs_mod <- attr(terms(term_mod), "term.labels")
       out_path_term_mod <- paste0(
         specs$result_out_dir, "/model_objects/",
         engine_label,
         "_", model,
         "_fdr_", tolower(fdr_ref), "_ref_",
-        paste(covs_term, collapse = "-"),
+        paste(covs_mod, collapse = "-"),
         dr_suffix, "_",
         study, "_",
         subset, ".rds")
@@ -136,10 +139,7 @@ results <- foreach(
     })
     
     bind_rows(base_row, term_rows)
-  }
-
-# Stop parallel cluster
-stopCluster(cl)
+})
 
 # Reformat results
 results <- results %>%

@@ -1,20 +1,27 @@
 # Test
 # model <- models[1]
 # specs <- study_specs[[study]]
-# pheno <- specs$pheno_surv_path[[model]]
-# surv_def <- specs$surv_def[[paste0(model, "_surv_def")]]
+# pheno <- pheno_surv_path[[model]]
+# surv_def <- specs$surv_def[[model]]
 # outcome <- surv_def$event
 # time  <- surv_def$time
 # covs <- specs$surv_covs[[model]]
 # fdr_var <- config$fdr_var
 # fdr_ref <- config$fdr_ref
+# wald_test <- "fdr_4level"
+# 
 # tt_spec <- tt_spec
 # type <- tt_spec$type
 # n_knots <- tt_spec$knots
 # df <- tt_spec$df
 
+#TODO: should libraries used below be library() here? Or just in scripts
+# that call?
+
+# Automatically includes cluster(FID)
+#' @export
 mod_coxph <- function(
-    study, pheno, outcome, time, covs, fdr_var, fdr_ref) {
+    study, pheno, outcome, time, covs, fdr_var, fdr_ref, wald_test = NULL) {
 
   ### Prep
   # Read in pheno
@@ -25,14 +32,49 @@ mod_coxph <- function(
   pheno[[fdr_var]] <- relevel(as.factor(pheno[[fdr_var]]), ref = fdr_ref)
 
   ### Model:
+  # Formula automatically includes cluster(FID) for relatedness
   form <- as.formula(
     paste(paste0(
-      "Surv(", time, ",", outcome, ") ~ "),
+      "Surv(", time, ",", outcome, ") ~ cluster(FID) + "),
       paste(covs, collapse = "+")))
 
   mod <- coxph(form, data = pheno)
+  
+  # Wald test
+  if (!is.null(wald_test)) {
+    beta <- coef(mod)
+    v <- vcov(mod)
+    
+    if (grepl(":", wald_test)) {
+      # Interaction term
+      parts <- strsplit(wald_test, ":")[[1]]
+      term_pattern <- paste0(
+        "(", parts[1], ".*:", parts[2], ")|(",
+        parts[2], ".*:", parts[1], ")")
+    } else {
+      # Term
+      term_pattern <- paste0("^", wald_test)
+    }
+    term_idx <- which(grepl(term_pattern, names(beta)))
+    if (length(term_idx) == 0) {
+      stop("Wald test term not found in coefficients: ", wald_test)
+    }
+    
+    beta_sub <- beta[term_idx]
+    v_sub <- v[term_idx, term_idx, drop = FALSE]
+    
+    # Wald statistic
+    chisq <- as.numeric(t(beta_sub) %*% solve(v_sub) %*% beta_sub)
+    df <- length(beta_sub)
+    pval <- pchisq(chisq, df = df, lower.tail = FALSE)
+    
+    wald <- data.frame(
+      chisq = chisq,
+      df = df,
+      p = pval)
+  }
 
-  # Get overall model values
+  ### Get overall model values
   results <- data.frame(study = study)
   results$outcome <- outcome
   results$nobs = mod$n
@@ -65,17 +107,33 @@ mod_coxph <- function(
   colnames(results_ci_low) <- paste0("conf.low_", names(mod$coefficients))
   results_ci_high <- as.data.frame(t(ci_high))
   colnames(results_ci_high) <- paste0("conf.high_", names(mod$coefficients))
+  
+  # Extract Wald test on given variable
+  if (!is.null(wald_test)) {
+    results_w <- data.frame(
+      wald$p,
+      wald$chisq,
+      wald$df)
+    colnames(results_w) <- c(
+      paste0(wald_test, "_global_p"),
+      paste0(wald_test, "_global_chisq"),
+      paste0(wald_test, "_global_df"))
+  } else {
+    results_w <- data.frame()
+  }
 
   # Combine
   results_all_tmp <- cbind(
     results_est, results_se, results_z, results_p,
-    results_ci_low, results_ci_high)
+    results_ci_low, results_ci_high, results_w)
   colnames(results_all_tmp) <- colnames(results_all_tmp) %>%
     gsub(fdr_var, "fdr_", .) %>%
+    gsub("__+", "_", .) %>%
     gsub("Mom", "mom", .) %>%
     gsub("None", "none", .) %>%
     gsub("Sib", "sib", .) %>%
-    gsub("Dad", "dad", .)
+    gsub("Dad", "dad", .) %>%
+    gsub("_:", ":", .)  # in case fdr_var is also wald_test
   
   results_all <- as.data.frame(cbind(results, results_all_tmp))
   
@@ -92,7 +150,7 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
   boundary <- NULL
 
   if (type == "spline" && !is.na(n_knots) && !is.na(df)) {
-    exit("For spline, can only specify either tt_spec$knots or tt_spec$df.")
+    stop("For spline, can only specify either tt_spec$knots or tt_spec$df.")
   }
 
   if (type == "spline" && !is.na(n_knots)) {
@@ -124,6 +182,11 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
     knots <- attr(s_ref, "knots")
     boundary <- attr(s_ref, "Boundary.knots")
   }
+  
+  # Freeze variables in tt_fun
+  type_tt <- type
+  knots_tt <- knots
+  boundary_tt <- boundary
 
   tt_fun <- function(x, t, ...) {
 
@@ -135,12 +198,12 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
       mm <- cbind(x = x)
     }
 
-    if (type == "log") {
+    if (type_tt == "log") {
       return(mm * log(t))
-    } else if (type == "linear") {
+    } else if (type_tt == "linear") {
       return(mm * t)
-    } else if (type == "spline") {
-      s <- splines::ns(t, knots = knots, Boundary.knots = boundary)
+    } else if (type_tt == "spline") {
+      s <- splines::ns(t, knots = knots_tt, Boundary.knots = boundary_tt)
       out <- do.call(cbind, lapply(seq_len(ncol(mm)), function(j) {
         mm[, j] * s
       }))
@@ -151,11 +214,14 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
     }
     stop("Invalid tt type.")
   }
+  environment(tt_fun) <- environment()
   list(fun = tt_fun, knots = knots, boundary = boundary)
 }
 
+#' @export
 mod_coxph_tt <- function(
-    study, pheno, outcome, time, covs, fdr_var, fdr_ref, tt_spec) {
+    study, pheno, outcome, time, covs, fdr_var, fdr_ref, tt_spec,
+    wald_test = NULL) {
   
   ### Prep
   # Read in pheno
@@ -166,9 +232,10 @@ mod_coxph_tt <- function(
   pheno[[fdr_var]] <- relevel(as.factor(pheno[[fdr_var]]), ref = fdr_ref)
   
   ### Model
+  # Formula automatically includes cluster(FID) for relatedness
   form <- as.formula(
     paste(paste0(
-      "Surv(", time, ",", outcome, ") ~ "),
+      "Surv(", time, ",", outcome, ") ~ cluster(FID) + "),
       paste(covs, collapse = "+"),
       "+ tt(", tt_spec$var, ")"))
   
@@ -176,7 +243,7 @@ mod_coxph_tt <- function(
   knots <- if (is.null(tt_spec$knots)) NA else tt_spec$knots
   df <- if (is.null(tt_spec$df)) NA else tt_spec$df
   if (!is.na(knots) && !is.na(df)) {
-    exit("Can only specify either tt_spec$knots or tt_spec$df.")
+    stop("Can only specify either tt_spec$knots or tt_spec$df.")
   }
   tt_obj <- build_tt(
     type = tt_spec$type,
@@ -205,6 +272,40 @@ mod_coxph_tt <- function(
     var = tt_spec$var,
     knots = tt_obj$knots,
     boundary = tt_obj$boundary)
+  
+  # Wald test
+  if (!is.null(wald_test)) {
+    beta <- coef(mod)
+    v <- vcov(mod)
+    
+    if (grepl(":", wald_test)) {
+      # Interaction term
+      parts <- strsplit(wald_test, ":")[[1]]
+      term_pattern <- paste0(
+        "(", parts[1], ".*:", parts[2], ")|(",
+        parts[2], ".*:", parts[1], ")")
+    } else {
+      # Term
+      term_pattern <- paste0("^", wald_test)
+    }
+    term_idx <- which(grepl(term_pattern, names(beta)))
+    if (length(term_idx) == 0) {
+      stop("Wald test term not found in coefficients: ", wald_test)
+    }
+    
+    beta_sub <- beta[term_idx]
+    v_sub <- v[term_idx, term_idx, drop = FALSE]
+    
+    # Wald statistic
+    chisq <- as.numeric(t(beta_sub) %*% solve(v_sub) %*% beta_sub)
+    df <- length(beta_sub)
+    pval <- pchisq(chisq, df = df, lower.tail = FALSE)
+    
+    wald <- data.frame(
+      chisq = chisq,
+      df = df,
+      p = pval)
+  }
   
   # Get overall model values
   results <- data.frame(study = study)
@@ -241,18 +342,34 @@ mod_coxph_tt <- function(
   colnames(results_ci_low) <- paste0("conf.low_", names(mod$coefficients))
   results_ci_high <- as.data.frame(t(ci_high))
   colnames(results_ci_high) <- paste0("conf.high_", names(mod$coefficients))
+
+  # Extract Wald test on given variable
+  if (!is.null(wald_test)) {
+    results_w <- data.frame(
+      wald$p,
+      wald$chisq,
+      wald$df)
+    colnames(results_w) <- c(
+      paste0(wald_test, "_global_p"),
+      paste0(wald_test, "_global_chisq"),
+      paste0(wald_test, "_global_df"))
+  } else {
+    results_w <- data.frame()
+  }
   
   # Combine
   results_all_tmp <- cbind(
     results_est, results_se, results_z, results_p,
-    results_ci_low, results_ci_high)
+    results_ci_low, results_ci_high, results_w)
   colnames(results_all_tmp) <- colnames(results_all_tmp) %>%
     gsub(fdr_var, "fdr_", .) %>%
     gsub("fdr_)", "fdr)", .) %>%
+    gsub("__+", "_", .) %>%
     gsub("Mom", "mom", .) %>%
     gsub("None", "none", .) %>%
     gsub("Sib", "sib", .) %>%
-    gsub("Dad", "dad", .)
+    gsub("Dad", "dad", .) %>%
+    gsub("_:", ":", .)  # in case fdr_var is also wald_test
   
   results_all <- as.data.frame(cbind(results, results_all_tmp))
   

@@ -21,33 +21,20 @@ knit: |
 ---
 
 ```{r setup, include=FALSE}
-
 library(here)
-source("config.R")
+devtools::load_all()
 source(here("config.R"))
-source(here("R/study_specs.R"))
-source(here("set_paper_colors.R"))
 
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
   root.dir = study_specs$teddy$result_out_dir)
 
 library(tidyverse)
+library(conflicted)
 library(table1)
 library(ggpubr)
-library(haven)
-library(dplyr)
-library(tidyr)
-library(janitor)
-library(ggplot2)
-library(knitr)
-library(khroma)
-library(writexl)
-library(sas7bdat)
-library(readxl)
-library(data.table)
-library(tidytext)
-library(kableExtra)
+library(cowplot)
+library(survminer)
 
 ```
 
@@ -63,20 +50,13 @@ report has been cleaned up to only include the final version presented in the
 manuscript. The results for all are still saved at
 Maternal_Protection/data/results/famhist_prs.
 
-### Subset Genetic Input
-
-GRS2x variant selection and genotype subsetting were performed prior to analysis
-(see `scripts/extract_grs2x_variants.*`).
-
-*TODO: move this to somewhere else?*
-
-
 # **Load Data**
 
 
 ```{r, message = F}
+#TODO: move these to config?
 fdr_order <- c("Father", "Mother", "Sibling", "None")
-outcome_order <- c("IA", "Progression", "T1D")
+outcome_order <- c("T1D", "IA", "Progression")
 
 # From step 01 - read in pheno files
 t_all <- readRDS(
@@ -87,110 +67,71 @@ t_all_prog <- readRDS(
 t_ctrls_ia <- readRDS(
   paste0(study_specs$teddy$intermed_out_dir, "/pheno_ctrls_ia.rds"))
 
-# # From step 02 - read in hypoth 1 results
-# m1_dad <- read_csv(
-#   "Maternal_Protection/data/results/famhist_prs/lm_GRS2x_fdr_dad_ref_daisy_teddy_all.csv")
+# From step 02 - read in hypoth 1 results
+m1_dad <- read_csv(
+  "lm_GRS2x_fdr_dad_ref_teddy_all.csv")
+m_ia_lin_g <- readRDS(
+  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
 
-# # From step 03 - read in hypoth 2 results
-# m2_dad <- read_csv(
-#   "Maternal_Protection/data/results/famhist_prs/lm_outcome_fdr_dad_ref_GRS2x_daisy_teddy_all.csv")
+# From step 03 - read in hypoth 2 results
+# Primary results - coxph
+m2_dad_ia <- read_csv(
+  "coxph_tt_linear_IA_fdr_dad_ref_GRS2x_teddy_all.csv")
+m2_dad_t1d_prog <- read_csv(
+  "coxph_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_all.csv")
+# Supplementary results - coxph sex-stratified
+m2_female_ia <- read_csv("coxph_tt_linear_IA_fdr_dad_ref_GRS2x_teddy_female.csv")
+m2_female_t1d_prog <- read_csv("coxph_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_female.csv")
+m2_male_ia <- read_csv("coxph_tt_linear_IA_fdr_dad_ref_GRS2x_teddy_male.csv")
+m2_male_t1d_prog <- read_csv("coxph_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_male.csv")
+# CoxPH violation results - coxph no time-varying
+# No time-varying
+m2_ia_ph <- readRDS(
+  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+m2_ia_g_ph <- readRDS(
+  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+# Coxph results with interaction FDR*sex
+m2_ia_intxn <- read_csv(
+  "coxph_tt_linear_IA_fdr_dad_ref_GRS2x_teddy_all_intxn.csv")
+m2_t1d_prog_intxn <- read_csv(
+  "coxph_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_all_intxn.csv")
 
+# From TEDDY ancestry estimation
+pheno_raw <- read_tsv(study_specs$teddy$pheno_raw_path)
+gmm_pop <- read_delim(study_specs$teddy$ancestry_path)
 
+# From T1D mom & T1D dad allele freq comparison
+risk_score_dir <- dirname(study_specs$teddy$grs2_path)
+af_fam_grs2x <- read_delim(
+  paste0(risk_score_dir, "/afreq_by_fdr_grs2x.txt"),
+  col_types = cols(.default = col_character()))
+af_fam_grs2x_test <- read.table(
+  paste0(risk_score_dir, "/t1d_dad_mom_pheno_assoc_result.assoc"),
+         header = T)
 
+# From GRS2x run
+log_grs2x <- read_delim(
+  paste0(risk_score_dir, "/score_results_with_imp_log_summary.txt"),
+  col_types = cols(.default = col_character()))
 
-# # GRS2x TEDDY log
-# grs2x_teddy <- fread(
-#   "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results_with_imp_log_summary.txt")
-# 
-# # TOPMed R3 information
-# tmr3_teddy <- read_tsv(
-#   "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x.pvar",
-#   comment = "##")
-# 
-# # Read in male/female AFs
-# af_male <- read_delim(
-# "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_male.afreq")
-# af_female <- read_delim(
-# "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_female.afreq")
-# 
-# # Read in T1D Mom/Dad AFs
-# af_d <- read_delim(
-# "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_t1d_dad.afreq")
-# af_m <- read_delim(
-# "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/chr_all_concat_grs2x_t1d_mom.afreq")
+# From TOPMed imputation output
+tm_info <- read_tsv(
+  paste0(risk_score_dir, "/chr_all_concat_grs2x.pvar"),
+  comment = "##")
 
 ```
 
 
-
-# **Figure 1**
+# **Figures**
+## **Figure 1**
 
 Boxplot of GRS2x scores and forest plot of model 1 results.
 
-```{r}
-# data <- m1_dad
-# ref <- "dad"
-make_h1_forest_plot <- function(data, ref) {
-  
-  # Map reference to the other terms
-  fdr_all <- c("dad", "mom", "sib", "none")
-  fdr <- setdiff(fdr_all, ref)
-  
-  # Dynamically select columns
-  cols_to_select <- c(
-    "study",  # "group",
-    paste0("estimate_fdr_", fdr),
-    paste0("conf.low_fdr_", fdr),
-    paste0("conf.high_fdr_", fdr))
-  
-  data_plot <- data %>%
-    select(all_of(cols_to_select)) %>%
-    pivot_longer(
-      cols = matches("estimate_|conf\\.low_|conf\\.high_"),
-      names_to = c(".value", "term"),
-      names_pattern = "(estimate|conf\\.low|conf\\.high)_(.*)") %>%
-    dplyr::mutate(term = recode(
-      term,
-      fdr_mom = "Mother",
-      fdr_sib = "Sibling",
-      fdr_dad = "Father",
-      fdr_none = "None")) %>%
-    dplyr::mutate(term = factor(term, levels = rev(fdr_order)))
-  
-  # Build plot
-  plot <- ggplot(data_plot, aes(
-    x = term, y = estimate, ymin = conf.low, ymax = conf.high, color = term, fill = term)) +
-    geom_linerange(position = position_dodge(width = 0.5), show.legend = FALSE, size = 0.8) +
-    geom_hline(yintercept = 0, lty = 2) +
-    geom_point(size = 2.5, shape = 21, colour = "white", stroke = 0.5,
-               position = position_dodge(width = 0.5)) +
-    scale_fill_manual(values = c("Father" = color_fdr_dad,
-                                 "Mother" = color_fdr_mom,
-                                 "Sibling" = color_fdr_sib,
-                                 "None" = color_fdr_none)) +
-    scale_color_manual(values = c("Father" = color_fdr_dad,
-                                  "Mother" = color_fdr_mom,
-                                  "Sibling" = color_fdr_sib,
-                                  "None" = color_fdr_none)) +
-    coord_flip() +
-    theme_bw() +
-    labs(x = "", y = "Difference in GRS2x", fill = "FDR") +
-    theme(legend.position = "none",
-          strip.background = element_rect(fill = "white", color = "black"),
-          axis.text.y = element_text(angle = 90, hjust = 0.5))
-  
-  return(plot)
-  
-}
-
-```
-
-### **Boxplot**
 
 ```{r}
 # Prepping here for supplementary figure 1 as well
 pheno_all <- t_all %>%
-  dplyr::select(fdr_4level, GRS2x, Non_HLA, ia, persist_conf_ab, sex) %>%
+  dplyr::select(fdr_4level, GRS2x, Non_HLA, IA, sex) %>%
   dplyr::mutate(study = "TEDDY") %>%
   dplyr::mutate(fdr_4level = recode(
     fdr_4level,
@@ -201,7 +142,7 @@ pheno_all <- t_all %>%
     dplyr::mutate(fdr_4level = factor(fdr_4level, levels = fdr_order))
 
 pheno_ctrls <- t_ctrls_ia %>%
-  dplyr::select(fdr_4level, GRS2x, Non_HLA, ia, persist_conf_ab, sex) %>%
+  dplyr::select(fdr_4level, GRS2x, Non_HLA, IA, sex) %>%
   dplyr::mutate(study = "TEDDY") %>%
   dplyr::mutate(fdr_4level = recode(
     fdr_4level,
@@ -240,10 +181,7 @@ f1_a <- ggplot(pheno_all, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
     "None" = color_fdr_none, "Father" = color_fdr_dad,
     "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
 
-f1_a
 ```
-
-### **Dad as Ref**
 
 ```{r}
 # Remove DAISY, filter to only analysis in "all", not "ctrls
@@ -251,7 +189,6 @@ m1_dad_filt <- m1_dad %>%
   dplyr::filter(study == "teddy")
 
 f1_dad <- make_h1_forest_plot(m1_dad_filt, "dad")
-f1_dad
 
 ```
 
@@ -265,590 +202,15 @@ f1 <- ggarrange(
 f1
 
 ggsave(
-  "Maternal_Protection/dissemination/famhist_prs_paper/figures/fig_1_hypoth_1_forest_plots_dad_ref.png",
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_1.png"),
   f1, units = "in",  width = 7, height = 3, bg = "white")
 ```
 
 
+### **Data as Table for Text**
 
-# **Figure 2**
-
-Forest plot of hypothesis 2 model results.
-
-```{r}
-# data <- m2_dad
-# ref <- "dad"
-# term <- "GRS2x"
-make_h2_forest_plot <- function(data, ref, term) {
-  
-  fdr_all <- c("dad", "mom", "sib", "none")
-  fdr <- setdiff(fdr_all, ref)
-  
-  cols_to_select <- c(
-    "study", "term", "outcome",
-    paste0("estimate_fdr_", fdr),
-    paste0("conf.low_fdr_", fdr),
-    paste0("conf.high_fdr_", fdr))
-  
-  data_plot <- data %>%
-    select(all_of(cols_to_select)) %>%
-    dplyr::rename(model_type = term) %>%
-    pivot_longer(
-      cols = matches("estimate_|conf\\.low_|conf\\.high_"),
-      names_to = c(".value", "term"),
-      names_pattern = "(estimate|conf\\.low|conf\\.high)_(.*)") %>%
-    dplyr::mutate(term = recode(
-      term,
-      fdr_mom = "Mother",
-      fdr_sib = "Sibling",
-      fdr_dad = "Father",
-      fdr_none = "None")) %>%
-    dplyr::mutate(
-      or = exp(estimate),
-      or_conf_low = exp(conf.low),
-      or_conf_high = exp(conf.high)) %>%  # so plotting OR, not beta
-    dplyr::mutate(term = factor(term, levels = rev(fdr_order))) %>%
-    dplyr::mutate(outcome = case_when(
-      outcome == "case_t1dprog" ~ "Progression",
-      outcome == "ia" ~ "IA",
-      outcome == "persist_conf_ab" ~ "IA",
-      outcome == "t1d" ~ "T1D"))  %>%
-    dplyr::mutate(outcome = factor(outcome, levels = outcome_order))
-  
-  data_plot <- data_plot %>%
-    dplyr::filter(is.na(model_type) | model_type == !!term) %>%
-    dplyr::filter(!duplicated(.)) %>%  # remove extra identical rows from without term
-    dplyr::mutate(model_type_ind = ifelse(is.na(model_type), "Without GRS2x", "With GRS2x")) %>%
-    dplyr::mutate(model_type_ind = factor(model_type_ind, levels = c("With GRS2x", "Without GRS2x")))
-
-  plot <- ggplot(
-    data_plot,
-    aes(x=term, y=or, ymin=or_conf_low, ymax=or_conf_high, color=term,
-        fill=term, alpha=model_type_ind)) + 
-    geom_linerange(position=position_dodge(width = 0.5), show.legend = F, size=0.8) +
-    geom_hline(yintercept = 1, lty=2) +
-    geom_point(size=2.5, shape=21, colour="white", stroke = 0.5,
-               position=position_dodge(width = 0.5)) +
-    scale_color_manual(values = c(
-      "Father" = color_fdr_dad,
-      "Mother" = color_fdr_mom,
-      "Sibling" = color_fdr_sib,
-      "None" = color_fdr_none),
-      guide = "none") +
-    scale_fill_manual(values = c(
-      "Father" = color_fdr_dad,
-      "Mother" = color_fdr_mom,
-      "Sibling" = color_fdr_sib,
-      "None" = color_fdr_none),
-      guide = "none") +
-    scale_alpha_manual(
-      values = c("Without GRS2x" = 0.4, "With GRS2x" = 1)) +
-    guides(
-    alpha = guide_legend(
-      reverse = T,
-      override.aes = list(
-        shape = 21,
-        size  = 3,
-        fill  = "grey50",
-        color = "grey50"))) +
-    coord_flip() +
-    theme_bw() +
-    labs(
-      x = "",
-      y = "Hazard Ratio",
-      alpha = "",
-    ) +
-    scale_x_discrete(labels = c("teddy" = "TEDDY","daisy" = "DAISY")) +
-    theme(legend.position = "bottom",
-          strip.background = element_rect(fill = "white", color = "black"),
-          axis.text.y = element_text(angle = 90, hjust = 0.5)) +
-    facet_wrap(~outcome)
-  
-  return(plot)
-  
-}
-
-```
-
-## **With/Without GRS2x**
-
-### **Dad as Ref**
-
-```{r}
-m2_dad_filt <- m2_dad %>%
-  dplyr::filter(study == "teddy")
-
-f2_dad <- make_h2_forest_plot(m2_dad_filt, "dad", "GRS2x")
-f2_dad
-
-ggsave(
-  "Maternal_Protection/dissemination/famhist_prs_paper/figures/fig_2_hypoth_2_grs2x_forest_plots_dad_ref.png",
-  f2_dad, units = "in",  width = 7, height = 3, bg = "white")
-
-```
-
-
-# **Supplemental Figure 3**
-
-Box plots of GRS2x components by family history.
-
-```{r}
-# Set plot scales
-non_hla_min <- 
-  floor(min(pheno_all$Non_HLA, pheno_ctrls$Non_HLA) - 0.5)
-  # -0.5 to allow for group size labels
-non_hla_max <- 
-  ceiling(max(pheno_all$Non_HLA, pheno_ctrls$Non_HLA))
-
-```
-
-
-### FigS3A
-
-```{r}
-sf3_a <- ggplot(pheno_ctrls, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot(alpha = 0.75) +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        legend.title = element_blank(),
-        legend.position = "bottom",
-        strip.background = element_rect(fill = "white", color = "black")) +
-  scale_y_continuous(
-    breaks = seq(grs2x_min, grs2x_max, by = 2), limits = c(grs2x_min, grs2x_max)) +
-  stat_summary(
-    fun.data = function(x) data.frame(y = grs2x_min, label = length(x)),
-    geom = "text") +
-  scale_fill_manual(values = c(
-    "None" = color_fdr_none, "Father" = color_fdr_dad,
-    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
-
-```
-
-### FigS3B
-
-```{r}
-sf3_b <- ggplot(pheno_all, aes(x = fdr_4level, y = Non_HLA, fill = fdr_4level)) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot(alpha = 0.75) +
-  labs(y = "Non-HLA GRS2x") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        legend.title = element_blank(),
-        legend.position = "bottom",
-        strip.background = element_rect(fill = "white", color = "black")) +
-  scale_y_continuous(
-    breaks = seq(non_hla_min, non_hla_max, by = 2), limits = c(non_hla_min, non_hla_max)) +
-  stat_summary(
-    fun.data = function(x) data.frame(y = non_hla_min, label = length(x)),
-    geom = "text") +
-  scale_fill_manual(values = c(
-    "None" = color_fdr_none, "Father" = color_fdr_dad,
-    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
-
-```
-
-### FigS3C
-
-IA in cases and controls - at Jill's recommendation calling these IA yes and IA
-no instead of cases/controls since working in full cohort. Using persist_conf_ab
-as IA here since rest of paper is defined this way as well.
-
-```{r}
-sf3_c <- ggplot(pheno_all, aes(x = persist_conf_ab, y = GRS2x, fill = as.factor(persist_conf_ab))) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot() +
-  labs(fill ="IA") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        legend.position = "bottom",
-        strip.background = element_rect(fill = "white", color = "black")) +
-  scale_y_continuous(
-    breaks = seq(grs2x_min, grs2x_max, by = 2), limits = c(grs2x_min, grs2x_max)) +
-  stat_summary(
-    fun.data = function(x) data.frame(y = grs2x_min, label = length(x)),
-    geom = "text") +
-  scale_fill_manual(
-    values = c("1" = color_case, "0" = color_control),
-    labels = c("1" = "Yes", "0" = "No"))
-
-```
-
-
-Also write out IA case and control means so can report in text:
-
-```{r}
-table1(~ GRS2x | persist_conf_ab, data=pheno_all)
-```
-
-### FigS1D
-
-GRS2x by sex.
-
-```{r}
-# male = 1, female = 0
-sf3_d <- ggplot(pheno_all, aes(x = sex, y = GRS2x, fill = as.factor(sex))) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot() +
-  labs(fill ="sex") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        legend.title = element_blank(),
-        legend.position = "bottom",
-        strip.background = element_rect(fill = "white", color = "black")) +
-  scale_y_continuous(
-    breaks = seq(grs2x_min, grs2x_max, by = 2), limits = c(grs2x_min, grs2x_max)) +
-  stat_summary(
-    fun.data = function(x) data.frame(y = grs2x_min, label = length(x)),
-    geom = "text") +
-  scale_fill_manual(
-    values = c("1" = color_case, "0" = color_control),
-    labels = c("1" = "Male", "0" = "Female"))
-
-
-```
-
-
-Also write out sex (male = 1, female = 0) means so can report in text:
-
-```{r}
-table1(~ GRS2x | sex, data=pheno_all)
-```
-
-
-
-
-### Combine & Write Out
-
-
-```{r}
-sf3_ab <- ggarrange(
-  sf3_a, sf3_b,
-  labels = c("A", "B"), nrow=1, widths = c(.5, .5),
-  common.legend = T, legend = "bottom")
-sf3_cd <- ggarrange(
-  sf3_c, sf3_d,
-  labels = c("C", "D"), nrow=1, widths = c(.5, .5))
-
-sf3 <- ggarrange(
-  sf3_ab,
-  sf3_cd,
-  nrow=2, widths = c(.5, .5), heights = c(1,1))
-
-sf3
-
-ggsave(
-  "Maternal_Protection/dissemination/famhist_prs_paper/figures/supp_fig_3_grs2x_boxplots.png",
-  sf3, units = "in",  width = 7, height = 6, bg = "white")
-```
-
-
-
-
-
-# **Check Age at IA/T1D by FDR**
-
-High-risk HLA more common in early onset T1D cases.
-Higher miscarriage in women with early-onset T1D.
-Selective loss of highest risk fetuses.
-So would expect to see older onset in mom children that live?
-
-```{r}
-t_all_ia <- t_all %>% dplyr::filter(ia == 1)  # 814
-ggplot(t_all_ia, aes(x=fdr_4level, y=fup4_L)) +
-  geom_boxplot()
-
-t_all_t1d <- t_all %>% dplyr::filter(t1d == 1)  # 369
-ggplot(t_all_t1d, aes(x=fdr_4level, y=fup_t1d)) +
-  geom_boxplot()
-
-
-```
-
-
-
-
-# **Table 1**
-
-```{r}
-# Combine datasets and add Group column
-pheno <- t_all_prog %>%
-  mutate(group = case_when(
-    #TODO: continue here!! ####################################
-  ))
-
-# Set variable labels
-label(pheno_all$sex) <- "Sex, N (%)"
-label(pheno_all$persist_conf_ab) <- "IA, N (%)"
-label(pheno_all$mAA_at_ia) <- "Multiple Autoantibodies at IA Seroconversion, N (%)"
-label(pheno_all$t1d) <- "T1D, N (%)"
-label(pheno_all$case_t1dprog) <- "Progression, N (%)"
-label(pheno_all$fdr_4level) <- "FDR, N (%)"
-label(pheno_all$dr34) <- "DR3/4, N (%)"
-
-# Create the table
-t1 <- table1(
-  ~ sex + fdr_4level + dr34 + GRS2x + mAA_at_ia + as.factor(persist_conf_ab) + as.factor(t1d) +
-    as.factor(case_t1dprog) | group,
-  data = pheno_all, overall = FALSE)
-t1
-
-# Convert table1 object to data frame
-t1_df <- as.data.frame(t1)
-
-# Define output folder and filename
-output_file <- "Maternal_Protection/dissemination/famhist_prs_paper/tables/table_1.xlsx"
-
-# Write Excel file
-write_xlsx(t1_df, path = output_file)
-```
-
-
-
-# **(Not Used) Supplemental Table 1 - AFs by Child Sex**
-
-Want to show source of GRS2x variants as well as AFs split by sex.
-
-First, get range of typed & TOPMed R3 imputed SNP Rsq. If wanted MAF, should
-really re-calculate in subset as these files have in all TEDDY.
-
-```{r}
-tmr3_teddy <- tmr3_teddy %>%
-  dplyr::mutate(
-    R2 = as.numeric(str_extract(INFO, "(?<=R2=)[0-9.]+")))
-
-```
-
-Now, look at GRS2x SNP weight and allele frequencies in TEDDY, split by sex.
-
-### Split Male/Female
-
-*This section only run once*
-
-```{r, eval = F}
-t_all_male <- t_all %>%
-  dplyr::filter(sex == 1) %>%
-  dplyr::select(ID) %>%
-  left_join(t_fam, by = c("ID" = "IID")) %>%
-  dplyr::relocate(FID, .before = ID)
-t_all_female <- t_all %>%
-  dplyr::filter(sex == 0) %>%
-  dplyr::select(ID) %>%
-  left_join(t_fam, by = c("ID" = "IID")) %>%
-  dplyr::relocate(FID, .before = ID)
-
-write_tsv(
-  t_all_male, "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/male_ids.txt",
-  col_names = F)
-write_tsv(
-  t_all_female, "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/female_ids.txt",
-  col_names = F)
-```
-
-
-```{bash, eval = F}
-cd Immunogenetics_T1D/genetics/teddy_r01
-
-plink2 --pfile risk_scores/grs2x/chr_all_concat_grs2x \
-  --keep risk_scores/grs2x/male_ids.txt \
-  --freq \
-  --out risk_scores/grs2x/chr_all_concat_grs2x_male
-  
-plink2 --pfile risk_scores/grs2x/chr_all_concat_grs2x \
-  --keep risk_scores/grs2x/female_ids.txt \
-  --freq \
-  --out risk_scores/grs2x/chr_all_concat_grs2x_female
-
-```
-
-### Make Table
-
-```{r}
-# First, get AFs split by sex
-af_comb <- inner_join(
-  af_female %>% dplyr::select(-`#CHROM`, -OBS_CT),
-  af_male %>% dplyr::select(-`#CHROM`, -OBS_CT),
-  by = c("ID", "REF", "ALT"),
-  suffix = c("_female", "_male"))  # all 64, so male/female same ALT
-
-af_comb_grs2x <- left_join(
-  grs2x_snps %>% dplyr::mutate(ID = paste0(POSITION_HG38, ":", REF, ":", ALT)),
-  af_comb,
-  by = c("ID", "REF", "ALT"))
-
-```
-
-
-```{r}
-# Now add in variant source
-tmr3_teddy_sub <- tmr3_teddy %>%
-  dplyr::mutate(chr_pos = paste0(`#CHROM`, ":", POS)) %>%
-  dplyr::mutate(
-    Typed   = grepl("TYPED", INFO),
-    Imputed = grepl("IMPUTED", INFO),
-    SNP_Category = case_when(
-      Typed & Imputed  ~ "typed_and_tm_r3_imp",
-      Typed & !Imputed ~ "typed",
-      !Typed & Imputed ~ "tm_r3_imp",
-      TRUE             ~ NA))
-
-# Add missing grs2x imputed SNPs to TEDDY
-grs2x_imputed_snps <- grs2x_teddy %>%
-  filter(grs2x_imp == "imputed") %>%
-  filter(!chr_pos %in% tmr3_teddy_sub$chr_pos) %>%
-  mutate(SNP_Category = "grs2x_imp")
-all_snps <- full_join(
-  tmr3_teddy_sub,
-  grs2x_imputed_snps) %>%
-  dplyr::select(chr_pos, SNP_Category)
-
-# Merge this info into table with SNPs & AFs
-af_comb_grs2x_src <- left_join(
-  af_comb_grs2x,
-  all_snps,
-  by = c("POSITION_HG38" = "chr_pos"))
-
-# Format for export
-af_comb_grs2x_src_exp <- af_comb_grs2x_src %>%
-  dplyr::select(-POSITION_HG38, -STRAND, -REPLACED) %>%
-  dplyr::relocate(
-    c(ALT_FREQS_female, ALT_FREQS_male), .after = ALT_FREQ) %>%
-  dplyr::relocate(
-    ID, .after = COMPONENT) %>%
-  dplyr::rename(
-    ALT_FREQS_grs2x = ALT_FREQ,
-    source = SNP_Category,
-    id_hg38 = ID)
-
-colnames(af_comb_grs2x_src_exp) <- tolower(colnames(af_comb_grs2x_src_exp))
-
-```
-
-
-# **Supplemental Table 1 - AFs by T1D-affected Mom vs. Dad**
-
-Want to show source of GRS2x variants as well as AFs split by T1D-affected
-mom vs. T1D-affected dad.
-
-### Split T1D Mom/T1D Dad
-
-*This section only run once*
-
-```{r, eval = F}
-t_all_d <- t_all %>%
-  dplyr::filter(fdr_4level == "Dad") %>%
-  dplyr::select(ID) %>%
-  left_join(t_fam, by = c("ID" = "IID")) %>%
-  dplyr::relocate(FID, .before = ID)
-t_all_m <- t_all %>%
-  dplyr::filter(fdr_4level == "Mom") %>%
-  dplyr::select(ID) %>%
-  left_join(t_fam, by = c("ID" = "IID")) %>%
-  dplyr::relocate(FID, .before = ID)
-
-write_tsv(
-  t_all_d, "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/t1d_dad_ids.txt",
-  col_names = F)
-write_tsv(
-  t_all_m, "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/t1d_mom_ids.txt",
-  col_names = F)
-```
-
-
-```{bash, eval = F}
-cd Immunogenetics_T1D/genetics/teddy_r01
-
-plink2 --pfile risk_scores/grs2x/chr_all_concat_grs2x \
-  --keep risk_scores/grs2x/t1d_dad_ids.txt \
-  --freq \
-  --out risk_scores/grs2x/chr_all_concat_grs2x_t1d_dad
-  
-plink2 --pfile risk_scores/grs2x/chr_all_concat_grs2x \
-  --keep risk_scores/grs2x/t1d_mom_ids.txt \
-  --freq \
-  --out risk_scores/grs2x/chr_all_concat_grs2x_t1d_mom
-
-```
-
-### Make Table
-
-```{r}
-# First, get AFs split by sex
-af_fam <- inner_join(
-  af_m %>% dplyr::select(-`#CHROM`, -OBS_CT),
-  af_d %>% dplyr::select(-`#CHROM`, -OBS_CT),
-  by = c("ID", "REF", "ALT"),
-  suffix = c("_mom", "_dad"))  # all 64, so same ALT
-
-af_fam_grs2x <- left_join(
-  grs2x_snps %>% dplyr::mutate(ID = paste0(POSITION_HG38, ":", REF, ":", ALT)),
-  af_fam,
-  by = c("ID", "REF", "ALT"))
-
-```
-
-
-```{r}
-# Now add in variant source
-tmr3_teddy_sub <- tmr3_teddy %>%
-  dplyr::mutate(chr_pos = paste0(`#CHROM`, ":", POS)) %>%
-  dplyr::mutate(
-    Typed   = grepl("TYPED", INFO),
-    Imputed = grepl("IMPUTED", INFO),
-    SNP_Category = case_when(
-      Typed & Imputed  ~ "typed_and_tm_r3_imp",
-      Typed & !Imputed ~ "typed",
-      !Typed & Imputed ~ "tm_r3_imp",
-      TRUE             ~ NA))
-
-# Add missing grs2x imputed SNPs to TEDDY
-grs2x_imputed_snps <- grs2x_teddy %>%
-  filter(grs2x_imp == "imputed") %>%
-  filter(!chr_pos %in% tmr3_teddy_sub$chr_pos) %>%
-  mutate(SNP_Category = "grs2x_imp")
-all_snps <- full_join(
-  tmr3_teddy_sub,
-  grs2x_imputed_snps) %>%
-  dplyr::select(chr_pos, SNP_Category)
-
-# Merge this info into table with SNPs & AFs
-af_fam_grs2x_src <- left_join(
-  af_fam_grs2x,
-  all_snps,
-  by = c("POSITION_HG38" = "chr_pos"))
-
-# Format for export
-af_fam_grs2x_src_exp <- af_fam_grs2x_src %>%
-  dplyr::select(-POSITION_HG38, -STRAND, -REPLACED) %>%
-  dplyr::relocate(
-    c(ALT_FREQS_mom, ALT_FREQS_dad), .after = ALT_FREQ) %>%
-  dplyr::relocate(
-    ID, .after = COMPONENT) %>%
-  dplyr::rename(
-    ALT_FREQS_grs2x = ALT_FREQ,
-    source = SNP_Category,
-    id_hg38 = ID)
-
-colnames(af_fam_grs2x_src_exp) <- tolower(colnames(af_fam_grs2x_src_exp))
-
-# Write Excel file
-write_csv(
-  af_fam_grs2x_src_exp %>% mutate(across(where(is.numeric), ~ round(.x, 3))),
-  "Maternal_Protection/dissemination/famhist_prs_paper/tables/supp_table_1.csv")
-
-```
-
-
-
-# **Supplemental Table 2**
-
-All results from hypothesis 1. Read in results here, reformat, and write out
-to manuscript tables folder.
-
+All results from hypothesis 1. Read in results here, reformat, and display here
+to be written into manuscript draft (no table).
 
 ```{r}
 m1_exp <- m1_dad_filt %>%
@@ -880,41 +242,550 @@ m1_exp_mod <- m1_exp %>%
   dplyr::mutate(fdr = factor(fdr, levels = rev(fdr_order)))
 
 # Write Excel file
-write_csv(
-  m1_exp_mod,
-  "Maternal_Protection/dissemination/famhist_prs_paper/tables/supp_table_2.csv")
+m1_exp_mod
 ```
 
 
-# **Supplemental Table 3**
+## **Figure 2**
+
+Forest plot of hypothesis 2 model results.
+
+### Fig2A
+
+```{r}
+m2_merge <- dplyr::bind_rows(
+  m2_dad_t1d_prog,
+  m2_dad_ia) %>%
+  dplyr::mutate(outcome = case_when(
+    str_detect(form, "T1D,") ~ "T1D",
+    str_detect(form, "fupT1D_prog") ~ "Progression",
+    TRUE ~ outcome)) %>%
+  dplyr::select(-which_fdr, -study)
+
+
+f2_a <- make_h2_forest_plot_manuscript(m2_merge, "dad", "GRS2x")
+f2_a
+
+```
+
+
+### Fig2B
+
+HR over time plot for IA model with GRS2x adjustment.
+
+```{r}
+lin_tt_g <- get_tt_hr(
+  mod = m_ia_lin_g,
+  var = "fdr_4level",
+  levels = c("None", "Mom", "Sib"),
+  ref_label = "Dad",
+  time_transform = identity,
+  times = seq(0, 15, 1))
+
+# Use same pheno as for IA (t_all)
+lin_tt_g_n <- get_n_remain(
+  data = t_all,
+  var = "fdr_4level",
+  time_var = "fupIA")
+
+
+f2_b <- plot_tt_hr_manuscript(
+  data = lin_tt_g,
+  var = "fdr_4level",
+  ref_label = "Dad",
+  times = seq(0, 15, 1),
+  add_last_matprot = T,
+  data_n = lin_tt_g_n) +
+  labs(x = "Age (Years)")
+f2_b
+
+```
+
+
+```{r}
+# Save combined figure
+f2 <- plot_grid(
+  f2_a + theme(
+  legend.text = element_text(margin = margin(l = 4))),
+  f2_b + theme(
+  legend.text = element_text(margin = margin(l = 4))),
+  ncol = 1,
+  align = "v",
+  axis = "lr", 
+  labels = c("A", "B"))
+
+f2
+
+ggsave(
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2.png"),
+  f2, units = "in",  width = 7, height = 5, bg = "white")
+
+```
+
+
+
+## **Supplemental Figure 1**
+
+Box plots of GRS2x components by family history.
+
+```{r}
+# Set plot scales
+non_hla_min <- 
+  floor(min(pheno_all$Non_HLA, pheno_ctrls$Non_HLA) - 0.5)
+  # -0.5 to allow for group size labels
+non_hla_max <- 
+  ceiling(max(pheno_all$Non_HLA, pheno_ctrls$Non_HLA))
+
+```
+
+
+### FigS1A
+
+IA in cases and controls - at Jill's recommendation calling these IA yes and IA
+no instead of cases/controls since working in full cohort.
+
+```{r}
+sf1_a <- ggplot(pheno_all, aes(x = IA, y = GRS2x, fill = as.factor(IA))) +
+  # geom_boxplot(varwidth = TRUE, width = 1) +
+  geom_boxplot() +
+  labs(fill ="IA") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = "bottom",
+        strip.background = element_rect(fill = "white", color = "black")) +
+  scale_y_continuous(
+    breaks = seq(grs2x_min, grs2x_max, by = 2), limits = c(grs2x_min, grs2x_max)) +
+  stat_summary(
+    fun.data = function(x) data.frame(y = grs2x_min, label = length(x)),
+    geom = "text") +
+  scale_fill_manual(
+    values = c("1" = color_case, "0" = color_control),
+    labels = c("1" = "Yes", "0" = "No"))
+
+```
+
+
+### FigS1B
+
+GRS2x by sex.
+
+```{r}
+# male = 1, female = 0
+sf1_b <- ggplot(pheno_all, aes(x = sex, y = GRS2x, fill = as.factor(sex))) +
+  # geom_boxplot(varwidth = TRUE, width = 1) +
+  geom_boxplot() +
+  labs(fill ="sex") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.title = element_blank(),
+        legend.position = "bottom",
+        strip.background = element_rect(fill = "white", color = "black")) +
+  scale_y_continuous(
+    breaks = seq(grs2x_min, grs2x_max, by = 2), limits = c(grs2x_min, grs2x_max)) +
+  stat_summary(
+    fun.data = function(x) data.frame(y = grs2x_min, label = length(x)),
+    geom = "text") +
+  scale_fill_manual(
+    values = c("1" = color_case, "0" = color_control),
+    labels = c("1" = "Male", "0" = "Female"))
+
+
+```
+
+
+Also write out sex (male = 1, female = 0) means so can report in text:
+
+```{r}
+table1(~ GRS2x | sex, data=pheno_all)
+```
+
+
+### FigS1C
+
+```{r}
+sf1_c <- ggplot(pheno_ctrls, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  # geom_boxplot(varwidth = TRUE, width = 1) +
+  geom_boxplot(alpha = 0.75) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.title = element_blank(),
+        legend.position = "bottom",
+        strip.background = element_rect(fill = "white", color = "black")) +
+  scale_y_continuous(
+    breaks = seq(grs2x_min, grs2x_max, by = 2), limits = c(grs2x_min, grs2x_max)) +
+  stat_summary(
+    fun.data = function(x) data.frame(y = grs2x_min, label = length(x)),
+    geom = "text") +
+  scale_fill_manual(values = c(
+    "None" = color_fdr_none, "Father" = color_fdr_dad,
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
+
+```
+
+### FigS1D
+
+```{r}
+sf1_d <- ggplot(pheno_all, aes(x = fdr_4level, y = Non_HLA, fill = fdr_4level)) +
+  # geom_boxplot(varwidth = TRUE, width = 1) +
+  geom_boxplot(alpha = 0.75) +
+  labs(y = "Non-HLA GRS2x") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.title = element_blank(),
+        legend.position = "bottom",
+        strip.background = element_rect(fill = "white", color = "black")) +
+  scale_y_continuous(
+    breaks = seq(non_hla_min, non_hla_max, by = 2), limits = c(non_hla_min, non_hla_max)) +
+  stat_summary(
+    fun.data = function(x) data.frame(y = non_hla_min, label = length(x)),
+    geom = "text") +
+  scale_fill_manual(values = c(
+    "None" = color_fdr_none, "Father" = color_fdr_dad,
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
+
+```
+
+### Combine & Write Out
+
+```{r}
+sf1_ab <- ggarrange(
+  sf1_a, sf1_b,
+  labels = c("A", "B"), nrow=1, widths = c(.5, .5))
+sf1_cd <- ggarrange(
+  sf1_c, sf1_d,
+  labels = c("C", "D"), nrow=1, widths = c(.5, .5),
+  common.legend = T, legend = "bottom")
+
+sf1 <- ggarrange(
+  sf1_ab,
+  sf1_cd,
+  nrow=2, widths = c(.5, .5), heights = c(1,1))
+
+sf1
+
+ggsave(
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/supp_fig_1.png"),
+  sf1, units = "in",  width = 7, height = 6, bg = "white")
+
+```
+
+
+## **Supplemental Figure 2**
+
+```{r}
+# Prep data
+m2_female <- dplyr::bind_rows(
+  m2_female_ia,
+  m2_female_t1d_prog) %>%
+  dplyr::mutate(outcome = case_when(
+    str_detect(form, "T1D,") ~ "T1D",
+    str_detect(form, "fupT1D_prog") ~ "Progression",
+    TRUE ~ outcome)) %>%
+  dplyr::select(-which_fdr, -study)
+m2_male <- dplyr::bind_rows(
+  m2_male_ia,
+  m2_male_t1d_prog) %>%
+  dplyr::mutate(outcome = case_when(
+    str_detect(form, "T1D,") ~ "T1D",
+    str_detect(form, "fupT1D_prog") ~ "Progression",
+    TRUE ~ outcome)) %>%
+  dplyr::select(-which_fdr, -study)
+
+# Get common limits
+get_max_hr <- function(data) {
+  val <- data %>%
+    dplyr::select(starts_with("conf.high_fdr")) %>%
+    unlist() %>%
+    max(na.rm = TRUE)
+  return(exp(val))
+}
+get_min_hr <- function(data) {
+  val <- data %>%
+    dplyr::select(starts_with("conf.low_fdr")) %>%
+    unlist() %>%
+    min(na.rm = TRUE)
+  return(exp(val))
+}
+max_hr <- round(max(
+  get_max_hr(m2_female), get_max_hr(m2_male)))
+min_hr <- round(min(
+  get_min_hr(m2_female), get_min_hr(m2_male)))
+
+```
+
+
+Sex-stratified version of results in Figure 2A.
+
+```{r}
+sf2_a <- make_h2_forest_plot_manuscript(m2_female, "dad", "GRS2x") +
+  scale_y_continuous(limits = c(min_hr, max_hr))
+sf2_b <- make_h2_forest_plot_manuscript(m2_male, "dad", "GRS2x") +
+  scale_y_continuous(limits = c(min_hr, max_hr))
+
+```
+
+```{r}
+sf2 <- ggarrange(
+  sf2_a +
+    labs(y = ""),
+  sf2_b,
+  labels = c("A", "B"), nrow=2,
+  common.legend = T, legend = "right")
+
+sf2
+
+ggsave(
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/supp_fig_2.png"),
+  sf2, units = "in",  width = 7, height = 4, bg = "white")
+
+```
+
+
+### Frequency Table of Sample Size
+
+Also want to see sample sizes stratified by offspring sex in addition to
+outcome and affected relative (already in table 1).
+
+**Female:**
+
+```{r}
+t_all_f <- t_all %>%
+  dplyr::filter(sex == 0)
+
+table1(
+  ~ as.factor(IA) + as.factor(T1D) | fdr_4level,
+  data = t_all_f)
+
+```
+
+
+**Male:**
+
+```{r}
+t_all_m <- t_all %>%
+  dplyr::filter(sex == 1)
+
+table1(
+  ~ as.factor(IA) + as.factor(T1D) | fdr_4level,
+  data = t_all_m)
+
+```
+
+### Models with Sex*FDR Interaction
+
+Check p-value for the Wald test of all levels of sex*FDR interaction.
+
+*TODO: if keep this section, need to switch from manual rename of .csv files!*
+
+**IA:**
+
+```{r}
+m2_ia_intxn %>% dplyr::select(outcome, term, grep("global", colnames(.)))
+
+```
+
+
+**T1D:**
+
+```{r}
+m2_t1d_prog_intxn%>%
+  dplyr::mutate(outcome = case_when(
+    str_detect(form, "T1D,") ~ "T1D",
+    str_detect(form, "fupT1D_prog") ~ "Progression",
+    TRUE ~ outcome)) %>%
+  dplyr::select(outcome, term, grep("global", colnames(.)))
+```
+
+
+**Prog:**
+
+```{r}
+summary(m2_intxn_prog_g)$coefficients
+```
+
+
+## **Supplemental Figure 3**
+
+Consort diagram of study inclusions/exclusions made directly in Powerpoint.
+
+# **Tables**
+## **Supplemental Table 1**
+
+```{r}
+# Combine datasets and add Group column
+t_all_ia <- t_all %>%
+  dplyr::filter(IA == 1)
+t_all_t1d <- t_all %>%
+  dplyr::filter(T1D == 1)
+pheno <- rbind(
+  t_ctrls_ia %>% dplyr::mutate(group = "Unaffected"),
+  t_all_ia %>% dplyr::mutate(group = "IA"),
+  t_all_t1d %>% dplyr::mutate(group = "T1D"))
+
+# Set variable labels
+label(pheno$sex) <- "Female, N (%)"
+label(pheno$fdr_4level) <- "Affected relative, N (%)"
+label(pheno$dr34) <- "High-risk HLA DR3/4, N (%)"
+label(pheno$GRS2x) <- "GRS2x, Mean (SD)"
+label(pheno$cc) <- "Clinical center, N (%)"
+
+# Create the table
+t1 <- table1(
+  ~ sex + fdr_4level + dr34 + GRS2x + cc + fupIA + fupT1D | group,
+  data = pheno, overall = FALSE)
+
+# Convert table1 object to data frame
+t1_df <- data.frame(lapply(as.data.frame(t1), as.character), stringsAsFactors = FALSE)
+colnames(t1_df) <- c("level", colnames(t1_df)[-1])
+t1_df$var_name <- apply(t1_df[, -1, drop = FALSE], 1, function(x) any(x == ""))
+t1_df_mod <- t1_df %>%
+  mutate(
+    label = if_else(var_name, level, NA)) %>%
+  fill(label) %>%
+  dplyr::filter(!var_name) %>%
+  dplyr::mutate(level = trimws(level))
+
+# Prepare for export
+# clinical center: 1=COL, 2=GEO, 3=WAS, 4=FIN, 5=GER, 6=SWE
+t1_df_mod_exp <- t1_df_mod %>%
+  dplyr::select(label, level, Unaffected, IA, T1D) %>%
+  dplyr::mutate(label = ifelse(is.na(label), "N (%)", label)) %>%
+  dplyr::filter(!(label == "Female, N (%)" & level == 1)) %>% # only list female
+  dplyr::filter(!(label == "High-risk HLA DR3/4, N (%)" & level == 0)) %>%
+  dplyr::filter(!level == "Median [Min, Max]") %>%
+  dplyr::mutate(level = case_when(
+    label == "Clinical center, N (%)" & level == 1 ~ "COL",
+    label == "Clinical center, N (%)" & level == 2 ~ "GEO",
+    label == "Clinical center, N (%)" & level == 3 ~ "WAS",
+    label == "Clinical center, N (%)" & level == 4 ~ "FIN",
+    label == "Clinical center, N (%)" & level == 5 ~ "GER",
+    label == "Clinical center, N (%)" & level == 6 ~ "SWE",
+    TRUE ~ level)) %>%
+  dplyr::mutate(level = case_when(
+    level == "Dad" ~ "Father",
+    level == "Mom" ~ "Mother",
+    level == "Sib" ~ "Sibling",
+    TRUE ~ level)) %>%
+  dplyr::mutate(across(everything(), ~ gsub("\\(N=([0-9]+)\\)", "\\1", .)))
+
+# Add percentages to group Ns
+cols <- c("Unaffected", "IA", "T1D")
+rows <- which(t1_df_mod_exp$label == "N (%)")
+vals <- as.numeric(t1_df_mod_exp[rows, cols])
+percs <- round(vals / nrow(t_all) * 100, 1)
+t1_df_mod_exp[rows, cols] <-
+  paste0(vals, " (", percs, "%)")
+
+# Move all follow up time into single variable
+t1_df_mod_exp$T1D <- ifelse(
+    t1_df_mod_exp$label == "fupIA",
+    t1_df_mod_exp$T1D[t1_df_mod_exp$label == "fupT1D"],
+    t1_df_mod_exp$T1D)
+t1_df_mod_exp$label[t1_df_mod_exp$label == "fupIA"] <-
+  "Time-to-event or last follow-up (years), Mean (SD)"
+t1_df_mod_exp <- t1_df_mod_exp[t1_df_mod_exp$label != "fupT1D", ]
+
+# Write out
+write_csv(
+  t1_df_mod_exp,
+  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_1.csv"))
+
+```
+
+
+
+## **Supplemental Table 2**
+
+Want to show source of GRS2x variants as well as AFs split by T1D-affected
+mom vs. T1D-affected dad.
+
+```{r}
+# Add in variant source
+tm_info <- tm_info %>%
+  dplyr::mutate(chr_pos = paste0(`#CHROM`, ":", POS)) %>%
+  dplyr::mutate(
+    Typed   = grepl("TYPED", INFO),
+    Imputed = grepl("IMPUTED", INFO),
+    SNP_Category = case_when(
+      Typed & Imputed  ~ "typed_and_tm_r3_imp",
+      Typed & !Imputed ~ "typed",
+      !Typed & Imputed ~ "tm_r3_imp",
+      TRUE             ~ NA))
+
+# Add missing grs2x imputed SNPs to TOPMed imputation
+imp_grs2x <- log_grs2x %>%
+  dplyr::filter(grs2x_imp == "imputed") %>%
+  dplyr::filter(!chr_pos %in% tm_info$chr_pos) %>%
+  dplyr::mutate(SNP_Category = "grs2x_imp")
+all_snps <- full_join(
+  tm_info,
+  imp_grs2x) %>%
+  dplyr::select(chr_pos, SNP_Category)
+
+# Merge this info into table with SNPs & AFs
+af_fam_grs2x_src <- left_join(
+  af_fam_grs2x,
+  all_snps,
+  by = c("POSITION_HG38" = "chr_pos"))
+
+# Merge in PLINK statistical test results
+af_fam_grs2x_src_test <- left_join(
+  af_fam_grs2x_src,
+  af_fam_grs2x_test %>% dplyr::select(SNP, P),
+  by = c("ID" = "SNP"))
+
+# Format for export
+af_fam_grs2x_src_test_exp <- af_fam_grs2x_src_test %>%
+  dplyr::select(-POSITION_HG38, -STRAND, -REPLACED) %>%
+  dplyr::relocate(
+    c(ALT_FREQS_mother, ALT_FREQS_father), .after = ALT_FREQ) %>%
+  dplyr::relocate(
+    ID, .after = COMPONENT) %>%
+  dplyr::relocate(
+    P, .after = ALT_FREQS_father) %>%
+  dplyr::relocate(
+    EFFECT_ALELLE, .after = RSID) %>%
+  dplyr::rename(
+    alt_freqs_grs2x = ALT_FREQ,
+    source = SNP_Category,
+    id_hg38 = ID,
+    alt_freqs_p_value = P) %>%
+  dplyr::mutate(
+    alt_freqs_grs2x = as.numeric(alt_freqs_grs2x),
+    ALT_FREQS_mother = as.numeric(ALT_FREQS_mother),
+    ALT_FREQS_father = as.numeric(ALT_FREQS_father)) %>%
+  dplyr::mutate(across(where(is.numeric), ~ signif(.x, 3)))
+colnames(af_fam_grs2x_src_test_exp) <- tolower(colnames(af_fam_grs2x_src_test_exp))
+
+# Write Excel file
+write_csv(
+  af_fam_grs2x_src_test_exp,
+  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_2.csv"))
+
+```
+
+
+
+## **Supplemental Table 3**
 
 All results from hypothesis 2. Read in results here, reformat, and write out
 to manuscript tables folder.
 
 ```{r}
-m2_exp <- m2_dad_filt %>%
-  dplyr::mutate(outcome = case_when(
-    outcome == "case_t1dprog" ~ "Progression",
-    outcome == "ia" ~ "IA",
-    outcome == "persist_conf_ab" ~ "IA",
-    outcome == "t1d" ~ "T1D")) %>%
-  dplyr::mutate(model_type = "cox_prop_hazards") %>%
-  dplyr::relocate(model_type, .after = nobs) %>%
-  dplyr::select(-which_fdr, -study) %>%
-  dplyr::filter(is.na(term) | term == "GRS2x") %>%
-  dplyr::filter(!duplicated(.)) %>% # remove extra identical rows from without term
-  select(where(~ !all(is.na(.))))  # remove columns from non-GRS2x term
-
 fdr <- c("mom", "sib", "none")
 cols_to_select <- c(
-  "outcome", "term", "nobs", "model_type", "form",
+  "outcome", "term", "nobs", "form", "fdr_global_p",
   paste0("estimate_fdr_", fdr),
   paste0("conf.low_fdr_", fdr),
   paste0("conf.high_fdr_", fdr),
   paste0("z.value_fdr_", fdr),
   paste0("p.value_fdr_", fdr),
   paste0("std.error_fdr_", fdr))
-m2_exp <- m2_exp %>%
+m2_exp <- m2_merge %>%
   select(all_of(cols_to_select)) %>%
   pivot_longer(
     cols = matches(
@@ -924,21 +795,83 @@ m2_exp <- m2_exp %>%
       "(estimate|conf\\.low|conf\\.high|z\\.value|p\\.value|std\\.error)_(.*)") %>%
   dplyr::mutate(
     hr = exp(estimate),
-    hr_conf_low = exp(conf.low),
-    hr_conf_high = exp(conf.high)) # >%  # so plotting OR, not beta
-  
-m2_exp <- m2_exp %>%
+    hr_conf_low = exp(conf.low), # so showing HR, not beta/estimate
+    hr_conf_high = exp(conf.high)) %>%  
   dplyr::relocate(hr, hr_conf_low, hr_conf_high, .after = conf.high) %>%
+  dplyr::relocate(fdr_global_p, .after = p.value) %>%
   dplyr::mutate(fdr = case_when(
     fdr == "fdr_mom" ~ "Mother",
     fdr == "fdr_sib" ~ "Sibling",
     fdr == "fdr_none" ~ "None")) %>%
-  dplyr::mutate(fdr = factor(fdr, levels = rev(fdr_order)))
+  dplyr::mutate(fdr = factor(fdr, levels = rev(fdr_order))) %>%
+  dplyr::rename(
+    affected_relative = fdr,
+    grs2x_adjustment = term,
+    affected_relative_overall_p_value = fdr_global_p) %>%
+  dplyr::mutate(grs2x_adjustment = ifelse(is.na(grs2x_adjustment), "Without", "With"))  %>%
+  dplyr::mutate(across(-nobs & where(is.numeric), ~ signif(.x, 3))) %>%
+  dplyr::mutate(
+    outcome = factor(outcome, levels = outcome_order)) %>%
+  dplyr::arrange(outcome)
+colnames(m2_exp) <- gsub("\\.", "_", colnames(m2_exp))
 
 # Write Excel file
 write_csv(
   m2_exp,
-  "Maternal_Protection/dissemination/famhist_prs_paper/tables/supp_table_3.csv")
+  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_3.csv"))
+
+```
+
+
+
+
+# **Results Only In Text**
+
+## **Follow-Up Time**
+
+Want follow-up time of whole analysis population. This should be best
+represented by the "fupT1D" variable that captures T1D case date or control
+last visit date:
+
+```{r}
+summary(t_all$fupT1D)
+```
+
+## **Ancestry Estimation**
+
+Want to describe the Ns from each non-EUR 1000G population that were removed.
+
+```{r, message = F}
+# Re-running part of the utils_teddy.R logic here, if more time, revisit and
+# re-work so can use function(s) here
+pheno_intermed <- prep_teddy_base(study_specs$teddy)
+
+gmm_pop_filt <- gmm_pop %>%
+  dplyr::filter(IID %in% pheno_intermed$ID)
+table(gmm_pop_filt$pop_gmm)
+  
+```
+
+
+
+
+
+## **GRS2x Range**
+
+The updated table 1 only shows unaffected, IA, and T1D, but old paper results
+show range for all `r n_distinct(t_all$ID)`:
+
++ Summary: `r summary(t_all$GRS2x)`
++ Standard deviation: `r sd(t_all$GRS2x)`
+
+
+## **CoxPH Violation**
+
+More complete analysis was completed in time_varying_analysis.Rmd, but just
+reporting the IA model Cox proportional hazards violation here.
+
+```{r}
+show_cox_zph(m2_ia_ph)
 ```
 
 

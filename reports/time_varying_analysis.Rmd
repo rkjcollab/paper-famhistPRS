@@ -256,36 +256,8 @@ AIC(
 AIC(m_ia_spline_1, m_ia_spline_1_g)
 ```
 
-
-
 In general, GRS2x improves model fit and linear time has slightly lower AIC
 than log time.
-
-**Look at all models without GRS2x:**
-
-```{r}
-AIC(m_ia, m_ia_lin, m_ia_log, m_ia_spline)
-```
-
-All have fairly similar AIC, best is linear, then log, then spline, then no
-time interaction with fdr_4level.
-
-**Look at all models with GRS2x:**
-
-```{r}
-AIC(m_ia_g, m_ia_lin_g, m_ia_log_g, m_ia_spline_g)
-```
-
-**Look at knot ages:**
-
-```{r}
-m_ia_spline_3$tt_meta$knots
-m_ia_spline_5$tt_meta$knots
-m_ia_spline_3$tt_meta$boundary
-
-```
-
-
 
 ## **T1D**
 
@@ -391,8 +363,8 @@ ia_merge <- ia_merge %>%
 
 make_h2_forest_plot(
   data = ia_merge,
-  ref = "dad"
-)
+  ref = "dad",
+  fdr_order, outcome_order)
 ```
 
 
@@ -411,8 +383,8 @@ t1d_merge <- t1d_merge %>%
 
 make_h2_forest_plot(
   data = t1d_merge,
-  ref = "dad"
-)
+  ref = "dad",
+  fdr_order, outcome_order)
 ```
 
 
@@ -429,8 +401,8 @@ prog_merge <- prog_merge %>%
 
 make_h2_forest_plot(
   data = prog_merge,
-  ref = "dad"
-)
+  ref = "dad",
+  fdr_order, outcome_order)
 ```
 
 # **Plot IA Hazard Over Time**
@@ -589,7 +561,8 @@ make_h2_forest_plot(
   data = res_ia_cens$result_df %>%
     dplyr::mutate(model = "IA") %>%
     dplyr::mutate(model_group = "IA"),
-  ref = "dad")
+  ref = "dad",
+  fdr_order, outcome_order)
 
 ```
 

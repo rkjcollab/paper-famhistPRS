@@ -4,8 +4,9 @@
 # Setup ------------------------------------------------------------------------
 
 library(here)
-source(here("R/study_specs.R"))
+devtools::load_all()
 library(tidyverse)
+library(readxl)
 plink <- "plink2"
 
 snp_list_path <- here("PRSedm/snplists/grs2_version_snplists.xlsx")
@@ -32,6 +33,6 @@ plink_args <- c(
   "--pfile", study_specs$teddy$plink_path,
   "--extract", paste0(risk_score_dir, "/grs2x_snp_ids.txt"),
   "--make-pgen",
-  "--out", file.path(risk_score_dir, "/chr_all_concat_grs2x"))
+  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x"))
 
 system2(plink, plink_args)

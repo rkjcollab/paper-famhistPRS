@@ -2,14 +2,16 @@ library(dplyr)
 library(readr)
 library(tibble)
 
-prep_teddy <- function(specs) {
+#TODO: revisit the function split here, currently motivated by need to access
+# pheno before subset to EUR
+
+prep_teddy_base <- function(specs) {
   
   # Load
   pheno_raw <- read_tsv(specs$pheno_raw_path)
   fid <- read_delim(specs$fid_path, col_names = F)
   twin_list <- read_tsv(specs$twin_list_path)
   grs2 <- read_delim(specs$grs2_path)
-  pc <- readRDS(specs$pcair_path)
   
   # Add FID to pheno data
   # Assume input given is .bim, so first two cols are FID IID
@@ -42,9 +44,19 @@ prep_teddy <- function(specs) {
     pheno %>% mutate(IID = as.character(IID)),
     by = c("ID" = "IID"))
   
-  # Remove tiwns (identified genetically in
+  # Remove twins (identified genetically in
   # immuno_t1d/genetics/ancestry_estimation/TwinFinder.qmd)
-  df <- df %>% filter(!ID %in% twin_list$IID)
+  df <- df %>% dplyr::filter(!ID %in% twin_list$IID)
+  
+  return(df)
+  
+}
+  
+  
+prep_teddy_final <- function(specs, df) {
+  
+  # Load
+  pc <- readRDS(specs$pcair_path)
   
   # Add genetic PCs (in EUR only)
   pc_df <- as.data.frame(pc$vectors) %>%
@@ -55,7 +67,7 @@ prep_teddy <- function(specs) {
   
   # Filter to remove individuals with more than one FDR
   df <- df %>%
-    filter(!(family_mem_screen %in% 1:4))
+    dplyr::filter(!(family_mem_screen %in% 1:4))
   
   # HLA mapping
   df <- df %>%

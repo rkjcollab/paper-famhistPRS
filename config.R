@@ -1,4 +1,6 @@
 # Shared settings
+#TODO: how to do this in final makefile? subset = all, female, and male?
+# and study_specs needing no sex in covar when female or male?
 
 config <- list(
   studies = c("teddy"),
