@@ -246,6 +246,73 @@ m1_exp_mod
 ```
 
 
+
+### **Simplified for Graphical Abstract**
+
+```{r fig.width=3, fig.height=2.2}
+fdr_order_alt <- c("None", "Sibling", "Father", "Mother")
+#TODO: This is reverse, need to fix!
+
+pheno_all_alt <- pheno_all %>%
+  dplyr::mutate(fdr_4level = factor(fdr_4level, levels = fdr_order_alt))
+
+f1_a_abs <- ggplot(pheno_all_alt, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
+  geom_violin(alpha = 0.75, draw_quantiles = c(0.25, 0.5, 0.75)) +
+  labs(x = "") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        legend.title = element_blank(),
+        legend.position = "none",
+        strip.background = element_rect(fill = "white", color = "black")) +
+  scale_y_continuous(
+    breaks = seq(grs2x_min, grs2x_max, by = 2), limits = c(grs2x_min, grs2x_max)) +
+  scale_fill_manual(values = c(
+    "None" = color_fdr_none, "Father" = color_fdr_dad,
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib)) +
+  coord_flip()
+
+f1_a_abs 
+```
+
+
+
+### Distribution for Graphical Abstract
+
+
+```{r fig.width=3, fig.height=2}
+
+ggplot(pheno_all) +
+  geom_density(alpha = 0.75, fill = "darkgrey", aes(x = GRS2x)) +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.y = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "none",
+      strip.background = element_rect(fill = "white", color = "black"))
+
+ggplot(pheno_all) +
+  geom_density(alpha = 0.25, fill = "lightgrey", aes(x = GRS2x)) +
+  geom_density(alpha = 0.75, fill = "darkgrey", aes(x = GRS2x - 1)) +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.y = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "none",
+      strip.background = element_rect(fill = "white", color = "black"))
+
+```
+
+
 ## **Figure 2**
 
 Forest plot of hypothesis 2 model results.
@@ -321,6 +388,30 @@ ggsave(
   f2, units = "in",  width = 7, height = 5, bg = "white")
 
 ```
+
+### **Simplified for Graphical Abstract**
+
+```{r fig.width=4, fig.height=1.5}
+f2_b_abs <- f2_b
+f2_b_abs$layers <- f2_b_abs$layers[!sapply(
+  f2_b_abs$layers,
+  function(x) inherits(x$geom, "GeomText")
+)]
+
+
+f2_b_abs <- f2_b_abs +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        legend.title = element_blank(),
+        legend.position = "none",
+        strip.background = element_rect(fill = "white", color = "black")) +
+  scale_x_continuous(breaks = c(0,3,6,9,12))
+
+f2_b_abs
+```
+
 
 
 
