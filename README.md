@@ -1,5 +1,9 @@
 # MatProt PRS Family History Analysis
 
+This repository was dervied from the internal project: https://github.com/rkjcollab/explore_matprot,
+specifically from the genetics/famhistPRS/ subdirectory at tag paper-release-famhistPRS and commit 8765959.
+The code was extracted using git subtree split to preserve history. 
+
 This repository contains the analysis code for a manuscript evaluating whether type 1 diabetes polygenic risk scores explain first-degree relative patterns in TEDDY and related analyses.
 
 The repository is organized as a reproducible research compendium: the code is version controlled here, while private/raw study data are expected to live outside the repository under the collaboration data root defined by `RKJCOLLAB`.
