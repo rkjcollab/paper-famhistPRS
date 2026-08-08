@@ -35,6 +35,9 @@ library(table1)
 library(ggpubr)
 library(cowplot)
 library(survminer)
+library(ggpattern)
+library(broom)
+library(rstatix)
 
 ```
 
@@ -105,8 +108,11 @@ risk_score_dir <- dirname(study_specs$teddy$grs2_path)
 af_fam_grs2x <- read_delim(
   paste0(risk_score_dir, "/afreq_by_fdr_grs2x.txt"),
   col_types = cols(.default = col_character()))
-af_fam_grs2x_test <- read.table(
+af_fam_grs2x_test_m <- read.table(
   paste0(risk_score_dir, "/t1d_dad_mom_pheno_assoc_result.assoc"),
+         header = T)
+af_fam_grs2x_test_s <- read.table(
+  paste0(risk_score_dir, "/t1d_dad_sib_pheno_assoc_result.assoc"),
          header = T)
 
 # From GRS2x run
@@ -124,6 +130,8 @@ tm_info <- read_tsv(
 
 # **Figures**
 ## **Figure 1**
+
+### **Fig1AB**
 
 Boxplot of GRS2x scores and forest plot of model 1 results.
 
@@ -157,19 +165,48 @@ grs2x_min <-
   floor(min(pheno_all$GRS2x, pheno_ctrls$GRS2x) - 0.5)
   # -0.5 to allow for group size labels
 grs2x_max <- 
-  ceiling(max(pheno_all$GRS2x, pheno_ctrls$GRS2x))
+  ceiling(max(pheno_all$GRS2x, pheno_ctrls$GRS2x) + 2)
+  # +2 to allow for significance bars
 ```
+
+ANOVA for F1 A:
+
+```{r out.width = '50%', fig.show = 'hold'}
+# ANOVA for F1 A - use base R to run and check assumptions, but plot using
+# ggpubr/rstatix
+anova_f1_a_check <- aov(GRS2x ~ fdr_4level, data = pheno_all)
+print(summary(anova_f1_a_check))
+plot(anova_f1_a_check)  # check residual assumptions
+car::leveneTest(GRS2x ~ fdr_4level, data = pheno_all)  # check variances
+
+# For plotting
+anova_f1_a <- anova_test(GRS2x ~ fdr_4level, data = pheno_all)
+
+```
+
+Tukey's HSD for F1 A:
+
+```{r}
+tukey_f1_a <- pheno_all %>%
+  tukey_hsd(GRS2x ~ fdr_4level) %>%
+  add_xy_position(x = "fdr_4level") %>%
+  dplyr::mutate(
+    p.adj.label = ifelse(
+      p.adj < 0.01,
+      formatC(p.adj, format = "e", digits = 1),
+      formatC(p.adj, format = "f", digits = 3)))
+print(tukey_f1_a)
+
+```
+
 
 
 ```{r}
 f1_a <- ggplot(pheno_all, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot(alpha = 0.75) +
-  labs(x = "") +
+  geom_violin(alpha = 0.75, draw_quantiles = c(0.25, 0.5, 0.75)) +
+  labs(x = "Affected Relative") +
   theme_bw() +
-  theme(# axis.title.x = element_blank(),
-        # axis.text.x = element_blank(),
-        legend.title = element_blank(),
+  theme(legend.title = element_blank(),
         legend.position = "none",
         strip.background = element_rect(fill = "white", color = "black")) +
   scale_y_continuous(
@@ -179,16 +216,19 @@ f1_a <- ggplot(pheno_all, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
     geom = "text") +
   scale_fill_manual(values = c(
     "None" = color_fdr_none, "Father" = color_fdr_dad,
-    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib)) +
+  stat_pvalue_manual(
+    tukey_f1_a, tip.length = 0.01, hide.ns = TRUE,
+    label = "P-adj={p.adj.label}", step.increase = 0.02) +
+  labs(subtitle = paste0("ANOVA, P=", anova_f1_a$p))
 
 ```
 
 ```{r}
-# Remove DAISY, filter to only analysis in "all", not "ctrls
-m1_dad_filt <- m1_dad %>%
-  dplyr::filter(study == "teddy")
-
-f1_dad <- make_h1_forest_plot(m1_dad_filt, "dad")
+wald_f1_b_p <- formatC(m1_dad$fdr_global_p, format = "e", digits = 1)
+f1_dad <- make_h1_forest_plot(m1_dad, "dad", fdr_order)
+f1_dad <- f1_dad +
+  labs(subtitle =  paste0("Global Wald, P=", wald_f1_b_p))
 
 ```
 
@@ -202,7 +242,7 @@ f1 <- ggarrange(
 f1
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_1.png"),
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_1.pdf"),
   f1, units = "in",  width = 7, height = 3, bg = "white")
 ```
 
@@ -213,7 +253,7 @@ All results from hypothesis 1. Read in results here, reformat, and display here
 to be written into manuscript draft (no table).
 
 ```{r}
-m1_exp <- m1_dad_filt %>%
+m1_exp <- m1_dad %>%
   dplyr::mutate(model_type = "linear") %>%
   dplyr::relocate(model_type, .after = nobs) %>%
   dplyr::select(-which_fdr, -study)
@@ -250,65 +290,104 @@ m1_exp_mod
 ### **Simplified for Graphical Abstract**
 
 ```{r fig.width=3, fig.height=2.2}
-fdr_order_alt <- c("None", "Sibling", "Father", "Mother")
-#TODO: This is reverse, need to fix!
+fdr_order_abs <- c("None", "Sibling", "Father", "Mother")
 
 pheno_all_alt <- pheno_all %>%
-  dplyr::mutate(fdr_4level = factor(fdr_4level, levels = fdr_order_alt))
+  dplyr::mutate(fdr_4level = factor(fdr_4level, levels = rev(fdr_order_abs)))
 
 f1_a_abs <- ggplot(pheno_all_alt, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
   geom_violin(alpha = 0.75, draw_quantiles = c(0.25, 0.5, 0.75)) +
-  labs(x = "") +
+  labs(x = "Affected Relative") +
   theme_classic() +
-  theme(axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks = element_blank(),
-        axis.title.y = element_blank(),
-        axis.text.y = element_blank(),
+  theme(axis.ticks = element_blank(),
         legend.title = element_blank(),
         legend.position = "none",
         strip.background = element_rect(fill = "white", color = "black")) +
+  scale_x_discrete(
+    labels = c("None" = "Unaffected")) +
   scale_y_continuous(
     breaks = seq(grs2x_min, grs2x_max, by = 2), limits = c(grs2x_min, grs2x_max)) +
-  scale_fill_manual(values = c(
-    "None" = color_fdr_none, "Father" = color_fdr_dad,
-    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib)) +
+  scale_fill_manual(
+    values = c(
+      "None" = color_fdr_none_abs, "Father" = color_fdr_dad,
+      "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib)) +
   coord_flip()
 
-f1_a_abs 
+f1_a_abs
+
+ggsave(
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_1_a_graph_abstract.png"),
+  f1_a_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 ```
 
 
+### **Distribution for Graphical Abstract**
 
-### Distribution for Graphical Abstract
+Use random normal distributions to show:
 
+1. False father distribution
+2. False hypothesized left-shifted mother distribution, if remove highest GRS2x scores
+2. False mother distribution, identical to father but with line at high GRS2x
 
-```{r fig.width=3, fig.height=2}
+```{r fig.width=3, fig.height=2.2}
 
-ggplot(pheno_all) +
-  geom_density(alpha = 0.75, fill = "darkgrey", aes(x = GRS2x)) +
+data_rand_1 <- data.frame(norm = rnorm(n = 100000, mean = 0, sd = 1))
+
+data_rand <- bind_rows(
+  data_rand_1 %>%
+    dplyr::mutate(
+      fdr_4level = "None",
+      norm = norm - 0.75),
+  data_rand_1 %>%
+    dplyr::mutate(
+      fdr_4level = "Sibling"),
+  data_rand_1 %>%
+    dplyr::mutate(
+      fdr_4level = "Father"),
+  data_rand_1 %>%
+    dplyr::mutate(
+      fdr_4level = "Mother")) %>%
+  dplyr::mutate(
+    fdr_4level = factor(fdr_4level, levels = c(fdr_order_abs)),
+    line_val = 0.3*max(norm))
+
+dist_hypoth_abs <- ggplot(data_rand, aes(x = norm, fill = fdr_4level)) +
+  geom_density(alpha = 0.75) +
+  geom_vline(
+    data = data_rand %>%
+      dplyr::filter(fdr_4level %in% c("Mother")),
+    aes(xintercept = line_val),
+    linewidth = 0.5, linetype = "dashed") +
+  geom_area(
+    data = data_rand %>% dplyr::filter(fdr_4level == "Mother"),
+    stat = "density", 
+    aes(
+      x = stage(norm, after_stat = scales::oob_censor(x, c(unique(data_rand$line_val), Inf))),
+      y = after_stat(density)),
+    fill = "black", # Change to whatever highlight color you want
+    alpha = 0.5) +
+  facet_grid(rows = vars(fdr_4level), scales = "free_y") +
   theme_classic() +
-  theme(axis.title.x = element_blank(),
-      axis.text.x = element_blank(),
-      axis.ticks = element_blank(),
-      axis.title.y = element_blank(),
-      axis.text.y = element_blank(),
-      legend.title = element_blank(),
-      legend.position = "none",
-      strip.background = element_rect(fill = "white", color = "black"))
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.x = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_blank(),
+    legend.position = "none",
+    strip.background = element_blank(),
+    strip.text = element_blank()) +
+  scale_fill_manual(values = c(
+    "None" = color_fdr_none_abs, "Father" = color_fdr_dad,
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
 
-ggplot(pheno_all) +
-  geom_density(alpha = 0.25, fill = "lightgrey", aes(x = GRS2x)) +
-  geom_density(alpha = 0.75, fill = "darkgrey", aes(x = GRS2x - 1)) +
-  theme_classic() +
-  theme(axis.title.x = element_blank(),
-      axis.text.x = element_blank(),
-      axis.ticks = element_blank(),
-      axis.title.y = element_blank(),
-      axis.text.y = element_blank(),
-      legend.title = element_blank(),
-      legend.position = "none",
-      strip.background = element_rect(fill = "white", color = "black"))
+dist_hypoth_abs
+
+ggsave(
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/dist_hypoth_graph_abstract.png"),
+  dist_hypoth_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 
 ```
 
@@ -330,8 +409,8 @@ m2_merge <- dplyr::bind_rows(
   dplyr::select(-which_fdr, -study)
 
 
-f2_a <- make_h2_forest_plot_manuscript(m2_merge, "dad", "GRS2x")
-f2_a
+f2_a <- make_h2_forest_plot_manuscript(
+  m2_merge, "dad", "GRS2x", fdr_order, outcome_order)
 
 ```
 
@@ -350,21 +429,20 @@ lin_tt_g <- get_tt_hr(
   times = seq(0, 15, 1))
 
 # Use same pheno as for IA (t_all)
-lin_tt_g_n <- get_n_remain(
-  data = t_all,
-  var = "fdr_4level",
-  time_var = "fupIA")
+# lin_tt_g_n <- get_n_remain(
+#   data = t_all,
+#   var = "fdr_4level",
+#   time_var = "fupIA")
 
-
+# Option: can add data_n = ling_tt_g_n to get sample size at each time point
 f2_b <- plot_tt_hr_manuscript(
   data = lin_tt_g,
   var = "fdr_4level",
   ref_label = "Dad",
+  fdr_order = fdr_order,
   times = seq(0, 15, 1),
-  add_last_matprot = T,
-  data_n = lin_tt_g_n) +
+  add_last_matprot = T) +
   labs(x = "Age (Years)")
-f2_b
 
 ```
 
@@ -384,14 +462,58 @@ f2 <- plot_grid(
 f2
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2.png"),
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2.pdf"),
   f2, units = "in",  width = 7, height = 5, bg = "white")
 
 ```
 
 ### **Simplified for Graphical Abstract**
 
-```{r fig.width=4, fig.height=1.5}
+Figure 2A:
+
+```{r fig.width=3, fig.height=2.2}
+m2_merge_ia <- m2_merge %>%
+  dplyr::filter(outcome == "IA")
+
+f2_a_abs <- make_h2_forest_plot_manuscript(
+  m2_merge_ia, "dad", "GRS2x", fdr_order_abs, outcome_order) +
+  geom_point(size=3, shape=21, colour="white", stroke = 0.5,
+           position=position_dodge(width = 0.5)) +
+  theme_classic() +  # to match rest of graphical abstract themes
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical",
+    axis.title.x = element_blank(),
+    axis.text.y = element_text(angle = 0),
+    axis.title.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    strip.text = element_blank(),
+    strip.background = element_blank(),
+    legend.margin = margin(t = -5, r = 0, b = 0, l = 0),
+    legend.box.margin = margin(0, 0, 0, 0),
+    legend.key.size = unit(0.6, "lines"),
+    legend.box.spacing = unit(0, "pt")) +
+  scale_x_discrete(
+    labels = c("None" = "Unaffected")) +
+  scale_fill_manual(values = c(
+    "None" = color_fdr_none_abs, "Father" = color_fdr_dad,
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib), guide = "none") +
+  scale_color_manual(values = c(
+    "None" = color_fdr_none_abs, "Father" = color_fdr_dad,
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib), guide = "none")
+
+f2_a_abs
+
+ggsave(
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2_a_graph_abstract.png"),
+  f2_a_abs, units = "in",  width = 3, height = 2.2, bg = "white")
+```
+
+
+
+Figure 2B:
+
+```{r fig.width=3, fig.height=2.2}
 f2_b_abs <- f2_b
 f2_b_abs$layers <- f2_b_abs$layers[!sapply(
   f2_b_abs$layers,
@@ -401,21 +523,33 @@ f2_b_abs$layers <- f2_b_abs$layers[!sapply(
 
 f2_b_abs <- f2_b_abs +
   theme_classic() +
-  theme(axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        axis.text.y = element_blank(),
-        legend.title = element_blank(),
-        legend.position = "none",
-        strip.background = element_rect(fill = "white", color = "black")) +
-  scale_x_continuous(breaks = c(0,3,6,9,12))
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "white", color = "black")) +
+  scale_x_continuous(breaks = c(0,3,6,9,12)) +
+  scale_fill_manual(values = c(
+    "None" = color_fdr_none_abs, "Father" = color_fdr_dad,
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib),
+    labels = c("None" = "Unaffected")) +
+  scale_color_manual(values = c(
+    "None" = color_fdr_none_abs, "Father" = color_fdr_dad,
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib),
+    labels = c("None" = "Unaffected"))
+
 
 f2_b_abs
+
+ggsave(
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2_b_graph_abstract.png"),
+  f2_b_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 ```
 
 
-
-
 ## **Supplemental Figure 1**
+
+Consort diagram of study inclusions/exclusions made directly in Powerpoint.
+
+## **Supplemental Figure 2**
 
 Box plots of GRS2x components by family history.
 
@@ -425,20 +559,33 @@ non_hla_min <-
   floor(min(pheno_all$Non_HLA, pheno_ctrls$Non_HLA) - 0.5)
   # -0.5 to allow for group size labels
 non_hla_max <- 
-  ceiling(max(pheno_all$Non_HLA, pheno_ctrls$Non_HLA))
+  ceiling(max(pheno_all$Non_HLA, pheno_ctrls$Non_HLA) + 0.5)
+  # +0.5 to allow for significance bars
 
 ```
 
 
 ### FigS1A
 
-IA in cases and controls - at Jill's recommendation calling these IA yes and IA
-no instead of cases/controls since working in full cohort.
+T-test for FS1 A:
+
+```{r}
+pheno_all <- pheno_all %>%
+  dplyr::mutate(IA = as.factor(IA))
+t_fs1_a <- t_test(GRS2x ~ IA, data = pheno_all) %>%
+    dplyr::mutate(
+      p.label = ifelse(
+        p < 0.01,
+        formatC(p, format = "e", digits = 1),
+        formatC(p, format = "f", digits = 3)))
+print(t_fs1_a)
+
+```
+
 
 ```{r}
 sf1_a <- ggplot(pheno_all, aes(x = IA, y = GRS2x, fill = as.factor(IA))) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot() +
+  geom_violin(draw_quantiles = c(0.25, 0.5, 0.75)) +
   labs(fill ="IA") +
   theme_bw() +
   theme(axis.title.x = element_blank(),
@@ -452,7 +599,9 @@ sf1_a <- ggplot(pheno_all, aes(x = IA, y = GRS2x, fill = as.factor(IA))) +
     geom = "text") +
   scale_fill_manual(
     values = c("1" = color_case, "0" = color_control),
-    labels = c("1" = "Yes", "0" = "No"))
+    labels = c("1" = "Yes", "0" = "No")) +
+  stat_pvalue_manual(
+    t_fs1_a, y.position = grs2x_max - 1.5, tip.length = 0.01, label = "P={p.label}")
 
 ```
 
@@ -461,11 +610,24 @@ sf1_a <- ggplot(pheno_all, aes(x = IA, y = GRS2x, fill = as.factor(IA))) +
 
 GRS2x by sex.
 
+T-test for FS1 B:
+
+```{r}
+t_fs1_b <- t_test(GRS2x ~ sex, data = pheno_all) %>%
+  dplyr::mutate(
+    p.label = ifelse(
+      p < 0.01,
+      formatC(p, format = "e", digits = 1),
+      formatC(p, format = "f", digits = 3)))
+print(t_fs1_b)
+
+```
+
+
 ```{r}
 # male = 1, female = 0
-sf1_b <- ggplot(pheno_all, aes(x = sex, y = GRS2x, fill = as.factor(sex))) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot() +
+sf1_b <- ggplot(pheno_all, aes(x = sex, y = GRS2x, fill = sex)) +
+  geom_violin(draw_quantiles = c(0.25, 0.5, 0.75)) +
   labs(fill ="sex") +
   theme_bw() +
   theme(axis.title.x = element_blank(),
@@ -480,8 +642,9 @@ sf1_b <- ggplot(pheno_all, aes(x = sex, y = GRS2x, fill = as.factor(sex))) +
     geom = "text") +
   scale_fill_manual(
     values = c("1" = color_case, "0" = color_control),
-    labels = c("1" = "Male", "0" = "Female"))
-
+    labels = c("1" = "Male", "0" = "Female")) +
+  stat_pvalue_manual(
+    t_fs1_b, y.position = grs2x_max - 1.5, tip.length = 0.01, label = "P={p.label}")
 
 ```
 
@@ -495,10 +658,24 @@ table1(~ GRS2x | sex, data=pheno_all)
 
 ### FigS1C
 
+ANOVA for FS1 C:
+
+```{r out.width = '50%', fig.show = 'hold'}
+# ANOVA for F1 A - use base R to run and check assumptions, but plot using
+# ggpubr/rstatix
+anova_fs1_c_check <- aov(GRS2x ~ fdr_4level, data = pheno_ctrls)
+print(summary(anova_fs1_c_check))
+plot(anova_fs1_c_check)  # check residual assumptions
+car::leveneTest(GRS2x ~ fdr_4level, data = pheno_ctrls)  # check variances
+
+# For plotting
+anova_fs1_c <- anova_test(GRS2x ~ fdr_4level, data = pheno_ctrls)
+
+```
+
 ```{r}
 sf1_c <- ggplot(pheno_ctrls, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot(alpha = 0.75) +
+  geom_violin(alpha = 0.75, draw_quantiles = c(0.25, 0.5, 0.75)) +
   theme_bw() +
   theme(axis.title.x = element_blank(),
         axis.text.x = element_blank(),
@@ -512,16 +689,46 @@ sf1_c <- ggplot(pheno_ctrls, aes(x = fdr_4level, y = GRS2x, fill = fdr_4level)) 
     geom = "text") +
   scale_fill_manual(values = c(
     "None" = color_fdr_none, "Father" = color_fdr_dad,
-    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib)) +
+  labs(subtitle = sprintf("ANOVA, P=%.3g", anova_fs1_c$p))
 
 ```
 
 ### FigS1D
 
+ANOVA for FS1 D:
+
+```{r out.width = '50%', fig.show = 'hold'}
+# ANOVA for F1 A - use base R to run and check assumptions, but plot using
+# ggpubr/rstatix
+anova_fs1_d_check <- aov(Non_HLA ~ fdr_4level, data = pheno_all)
+print(summary(anova_fs1_d_check))
+plot(anova_fs1_d_check)  # check residual assumptions
+car::leveneTest(Non_HLA ~ fdr_4level, data = pheno_all)  # check variances
+
+# For plotting
+anova_fs1_d <- anova_test(Non_HLA ~ fdr_4level, data = pheno_all)
+
+```
+
+Tukey's HSD for FS1 D:
+
+```{r}
+tukey_fs1_d <- pheno_all %>%
+  tukey_hsd(Non_HLA ~ fdr_4level) %>%
+  add_xy_position(x = "fdr_4level") %>%
+  dplyr::mutate(
+    p.adj.label = ifelse(
+      p.adj < 0.01,
+      formatC(p.adj, format = "e", digits = 1),
+      formatC(p.adj, format = "f", digits = 3)))
+print(tukey_fs1_d)
+
+```
+
 ```{r}
 sf1_d <- ggplot(pheno_all, aes(x = fdr_4level, y = Non_HLA, fill = fdr_4level)) +
-  # geom_boxplot(varwidth = TRUE, width = 1) +
-  geom_boxplot(alpha = 0.75) +
+  geom_violin(alpha = 0.75, draw_quantiles = c(0.25, 0.5, 0.75)) +
   labs(y = "Non-HLA GRS2x") +
   theme_bw() +
   theme(axis.title.x = element_blank(),
@@ -536,7 +743,11 @@ sf1_d <- ggplot(pheno_all, aes(x = fdr_4level, y = Non_HLA, fill = fdr_4level)) 
     geom = "text") +
   scale_fill_manual(values = c(
     "None" = color_fdr_none, "Father" = color_fdr_dad,
-    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib))
+    "Mother" = color_fdr_mom, "Sibling" = color_fdr_sib)) +
+  stat_pvalue_manual(
+    tukey_fs1_d, tip.length = 0.01, hide.ns = TRUE,
+    label = "P-adj={p.adj.label}", step.increase = 0.08) +
+  labs(subtitle = sprintf("ANOVA, P=%.3g", anova_fs1_d$p))
 
 ```
 
@@ -559,13 +770,13 @@ sf1 <- ggarrange(
 sf1
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/supp_fig_1.png"),
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/supp_fig_2.pdf"),
   sf1, units = "in",  width = 7, height = 6, bg = "white")
 
 ```
 
 
-## **Supplemental Figure 2**
+## **Supplemental Figure 3**
 
 ```{r}
 # Prep data
@@ -612,9 +823,11 @@ min_hr <- round(min(
 Sex-stratified version of results in Figure 2A.
 
 ```{r}
-sf2_a <- make_h2_forest_plot_manuscript(m2_female, "dad", "GRS2x") +
+sf2_a <- make_h2_forest_plot_manuscript(
+  m2_female, "dad", "GRS2x", fdr_order, outcome_order) +
   scale_y_continuous(limits = c(min_hr, max_hr))
-sf2_b <- make_h2_forest_plot_manuscript(m2_male, "dad", "GRS2x") +
+sf2_b <- make_h2_forest_plot_manuscript(
+  m2_male, "dad", "GRS2x", fdr_order, outcome_order) +
   scale_y_continuous(limits = c(min_hr, max_hr))
 
 ```
@@ -630,7 +843,7 @@ sf2 <- ggarrange(
 sf2
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/supp_fig_2.png"),
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/supp_fig_3.pdf"),
   sf2, units = "in",  width = 7, height = 4, bg = "white")
 
 ```
@@ -680,7 +893,7 @@ m2_ia_intxn %>% dplyr::select(outcome, term, grep("global", colnames(.)))
 ```
 
 
-**T1D:**
+**T1D & Prog:**
 
 ```{r}
 m2_t1d_prog_intxn%>%
@@ -690,21 +903,8 @@ m2_t1d_prog_intxn%>%
     TRUE ~ outcome)) %>%
   dplyr::select(outcome, term, grep("global", colnames(.)))
 ```
-
-
-**Prog:**
-
-```{r}
-summary(m2_intxn_prog_g)$coefficients
-```
-
-
-## **Supplemental Figure 3**
-
-Consort diagram of study inclusions/exclusions made directly in Powerpoint.
-
 # **Tables**
-## **Supplemental Table 1**
+## **Table 1**
 
 ```{r}
 # Combine datasets and add Group column
@@ -783,13 +983,13 @@ t1_df_mod_exp <- t1_df_mod_exp[t1_df_mod_exp$label != "fupT1D", ]
 # Write out
 write_csv(
   t1_df_mod_exp,
-  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_1.csv"))
+  paste0(study_specs$teddy$manuscript_out_dir, "/tables/table_1.csv"))
 
 ```
 
 
 
-## **Supplemental Table 2**
+## **Supplemental Table 1**
 
 Want to show source of GRS2x variants as well as AFs split by T1D-affected
 mom vs. T1D-affected dad.
@@ -824,44 +1024,64 @@ af_fam_grs2x_src <- left_join(
   by = c("POSITION_HG38" = "chr_pos"))
 
 # Merge in PLINK statistical test results
-af_fam_grs2x_src_test <- left_join(
+af_fam_grs2x_src_test_tmp <- left_join(
   af_fam_grs2x_src,
-  af_fam_grs2x_test %>% dplyr::select(SNP, P),
+  af_fam_grs2x_test_m %>%
+    dplyr::select(SNP, P) %>%
+    dplyr::rename(P_mother = P),
+  by = c("ID" = "SNP"))
+af_fam_grs2x_src_test <- left_join(
+  af_fam_grs2x_src_test_tmp,
+  af_fam_grs2x_test_s %>%
+    dplyr::select(SNP, P) %>%
+    dplyr::rename(P_sibling = P),
   by = c("ID" = "SNP"))
 
 # Format for export
 af_fam_grs2x_src_test_exp <- af_fam_grs2x_src_test %>%
   dplyr::select(-POSITION_HG38, -STRAND, -REPLACED) %>%
   dplyr::relocate(
-    c(ALT_FREQS_mother, ALT_FREQS_father), .after = ALT_FREQ) %>%
+    c(ALT_FREQS_father, ALT_FREQS_mother, ALT_FREQS_sibling), .after = ALT_FREQ) %>%
   dplyr::relocate(
     ID, .after = COMPONENT) %>%
   dplyr::relocate(
-    P, .after = ALT_FREQS_father) %>%
+    P_mother, P_sibling, .after = ALT_FREQS_sibling) %>%
   dplyr::relocate(
     EFFECT_ALELLE, .after = RSID) %>%
   dplyr::rename(
     alt_freqs_grs2x = ALT_FREQ,
     source = SNP_Category,
     id_hg38 = ID,
-    alt_freqs_p_value = P) %>%
+    alt_freqs_mother_p_value = P_mother,
+    alt_freqs_sibling_p_value = P_sibling) %>%
   dplyr::mutate(
     alt_freqs_grs2x = as.numeric(alt_freqs_grs2x),
     ALT_FREQS_mother = as.numeric(ALT_FREQS_mother),
-    ALT_FREQS_father = as.numeric(ALT_FREQS_father)) %>%
+    ALT_FREQS_father = as.numeric(ALT_FREQS_father),
+    ALT_FREQS_sibling = as.numeric(ALT_FREQS_sibling)) %>%
   dplyr::mutate(across(where(is.numeric), ~ signif(.x, 3)))
 colnames(af_fam_grs2x_src_test_exp) <- tolower(colnames(af_fam_grs2x_src_test_exp))
 
 # Write Excel file
 write_csv(
   af_fam_grs2x_src_test_exp,
-  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_2.csv"))
+  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_1.csv"))
 
 ```
 
 
+### **Data for Text**
 
-## **Supplemental Table 3**
+Want to summarize the TOPMed imputation quality to include in the text.
+
+```{r}
+tm_info_r2 <- as.numeric(str_extract(tm_info$INFO, "(?<=R2=)\\d+(?:\\.\\d+)?"))
+summary(tm_info_r2)
+print(paste0("Mean = ", mean(tm_info_r2)))
+```
+
+
+## **Supplemental Table 2**
 
 All results from hypothesis 2. Read in results here, reformat, and write out
 to manuscript tables folder.
@@ -909,11 +1129,9 @@ colnames(m2_exp) <- gsub("\\.", "_", colnames(m2_exp))
 # Write Excel file
 write_csv(
   m2_exp,
-  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_3.csv"))
+  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_2.csv"))
 
 ```
-
-
 
 
 # **Results Only In Text**
@@ -942,9 +1160,6 @@ gmm_pop_filt <- gmm_pop %>%
 table(gmm_pop_filt$pop_gmm)
   
 ```
-
-
-
 
 
 ## **GRS2x Range**
