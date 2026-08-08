@@ -26,6 +26,9 @@ colors_fdr <- c(
   "Mom" = as.character(color_fdr_mom),
   "Sib" = as.character(color_fdr_sib))
 
+# Darker FDR none color for graphical abstract only
+color_fdr_none_abs <- darken(color_fdr_none, amount = 0.2)
+
 # Case/control colors
 color_case <- "#DDDDDD"  # grey included with muted
 color_control <- "white"
