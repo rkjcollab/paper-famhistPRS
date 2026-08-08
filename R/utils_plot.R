@@ -1,7 +1,7 @@
 
 # data <- m1_dad
 # ref <- "dad"
-make_h1_forest_plot <- function(data, ref) {
+make_h1_forest_plot <- function(data, ref, fdr_order) {
   
   # Map reference to the other terms
   fdr_all <- c("dad", "mom", "sib", "none")
@@ -152,7 +152,7 @@ make_h2_forest_plot <- function(data, ref, fdr_order, outcome_order) {
 # data <- m2_dad
 # ref <- "dad"
 # term <- "GRS2x"
-make_h2_forest_plot_manuscript <- function(data, ref, term) {
+make_h2_forest_plot_manuscript <- function(data, ref, term, fdr_order, outcome_order) {
   
   fdr_all <- c("dad", "mom", "sib", "none")
   fdr <- setdiff(fdr_all, ref)
@@ -242,6 +242,7 @@ plot_tt_hr_manuscript <- function(
     data,
     var,
     ref_label,
+    fdr_order,
     times = seq(0, 16, 0.5),
     add_last_matprot = FALSE,
     data_n = NULL) {
@@ -255,6 +256,8 @@ plot_tt_hr_manuscript <- function(
   p <- ggplot(data, aes(x = time, y = hr, color = cohort, fill = cohort)) +
     geom_line(linewidth = 1) +
     geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = NA) +
+    geom_line(aes(y = lower), linewidth = 0.3) +
+    geom_line(aes(y = upper), linewidth = 0.3) +
     geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
     scale_y_log10() +
     scale_x_continuous(breaks = times) +
