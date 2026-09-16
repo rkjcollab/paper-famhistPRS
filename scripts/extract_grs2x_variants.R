@@ -10,8 +10,8 @@ library(readxl)
 plink <- "plink2"
 
 snp_list_path <- here("PRSedm/snplists/grs2_version_snplists.xlsx")
-risk_score_dir <- dirname(study_specs$teddy$grs2_path)
-plink_path <- study_specs$teddy$plink_path
+risk_score_dir <- dirname(study_specs$grs2_path)
+plink_path <- study_specs$plink_path
 
 # Write SNP list ---------------------------------------------------------------
 
@@ -30,7 +30,7 @@ readr::write_tsv(
 # Run PLINK --------------------------------------------------------------------
 
 plink_args <- c(
-  "--pfile", study_specs$teddy$plink_path,
+  "--pfile", study_specs$plink_path,
   "--extract", paste0(risk_score_dir, "/grs2x_snp_ids.txt"),
   "--make-pgen",
   "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x"))

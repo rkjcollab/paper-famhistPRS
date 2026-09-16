@@ -1,11 +1,10 @@
 # Test
 # model <- models[1]
-# specs <- study_specs[[study]]
 # pheno <- pheno_surv_path[[model]]
-# surv_def <- specs$surv_def[[model]]
+# surv_def <- study_specs$surv_def[[model]]
 # outcome <- surv_def$event
 # time  <- surv_def$time
-# covs <- specs$surv_covs[[model]]
+# covs <- study_specs$surv_covs[[model]]
 # fdr_var <- config$fdr_var
 # fdr_ref <- config$fdr_ref
 # wald_test <- "fdr_4level"
@@ -21,7 +20,7 @@
 # Automatically includes cluster(FID)
 #' @export
 mod_coxph <- function(
-    study, pheno, outcome, time, covs, fdr_var, fdr_ref, wald_test = NULL) {
+    pheno, outcome, time, covs, fdr_var, fdr_ref, wald_test = NULL) {
 
   ### Prep
   # Read in pheno
@@ -75,8 +74,7 @@ mod_coxph <- function(
   }
 
   ### Get overall model values
-  results <- data.frame(study = study)
-  results$outcome <- outcome
+  results <- data.frame(outcome = outcome)
   results$nobs = mod$n
   results$form = paste0(
     as.character(form)[2], as.character(form)[1], as.character(form)[3])
@@ -220,7 +218,7 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
 
 #' @export
 mod_coxph_tt <- function(
-    study, pheno, outcome, time, covs, fdr_var, fdr_ref, tt_spec,
+    pheno, outcome, time, covs, fdr_var, fdr_ref, tt_spec,
     wald_test = NULL) {
   
   ### Prep
@@ -308,8 +306,7 @@ mod_coxph_tt <- function(
   }
   
   # Get overall model values
-  results <- data.frame(study = study)
-  results$outcome <- outcome
+  results <- data.frame(outcome = outcome)
   results$nobs = mod$n
   results$form = paste0(
     as.character(form)[2], as.character(form)[1], as.character(form)[3])

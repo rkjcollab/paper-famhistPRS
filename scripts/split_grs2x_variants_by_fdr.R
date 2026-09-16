@@ -14,8 +14,8 @@ library(readxl)
 plink <- "plink2"
 plink1 <- "plink"
 
-pheno_path <- paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_ia.rds")
-risk_score_dir <- dirname(study_specs$teddy$grs2_path)
+pheno_path <- paste0(study_specs$intermed_out_dir, "/pheno_all_ia.rds")
+risk_score_dir <- dirname(study_specs$grs2_path)
 # same as pheno_all_t1d.rds
 snp_list_path <- here("PRSedm/snplists/grs2_version_snplists.xlsx")
 

@@ -9,7 +9,6 @@ make_h1_forest_plot <- function(data, ref, fdr_order) {
   
   # Dynamically select columns
   cols_to_select <- c(
-    "study",  # "group",
     paste0("estimate_fdr_", fdr),
     paste0("conf.low_fdr_", fdr),
     paste0("conf.high_fdr_", fdr))
@@ -65,7 +64,7 @@ make_h2_forest_plot <- function(data, ref, fdr_order, outcome_order) {
   fdr <- setdiff(fdr_all, ref)
   
   cols_to_select <- c(
-    "study", "model", "outcome", "model_group",
+    "model", "outcome", "model_group",
     paste0("estimate_fdr_", fdr),
     paste0("conf.low_fdr_", fdr),
     paste0("conf.high_fdr_", fdr))
@@ -226,7 +225,6 @@ make_h2_forest_plot_manuscript <- function(data, ref, term, fdr_order, outcome_o
       y = "Hazard Ratio",
       alpha = "",
     ) +
-    scale_x_discrete(labels = c("teddy" = "TEDDY","daisy" = "DAISY")) +
     theme(legend.position = "right",
           legend.direction = "vertical",
           strip.background = element_rect(fill = "white", color = "black"),

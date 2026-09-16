@@ -15,7 +15,7 @@ knit: |
     rmarkdown::render(
       inputFile,
       encoding = encoding,
-      output_dir = study_specs$teddy$report_out_dir
+      output_dir = study_specs$report_out_dir
     )
   })
 ---
@@ -27,7 +27,7 @@ source(here("config.R"))
 
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
-  root.dir = study_specs$teddy$result_out_dir)
+  root.dir = study_specs$result_out_dir)
 
 library(tidyverse)
 library(conflicted)
@@ -63,12 +63,12 @@ outcome_order <- c("T1D", "IA", "Progression")
 
 # From step 01 - read in pheno files
 t_all <- readRDS(
-  paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_ia.rds"))
+  paste0(study_specs$intermed_out_dir, "/pheno_all_ia.rds"))
   # same as pheno_all_t1d.rds
 t_all_prog <- readRDS(
-  paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_prog.rds"))
+  paste0(study_specs$intermed_out_dir, "/pheno_all_prog.rds"))
 t_ctrls_ia <- readRDS(
-  paste0(study_specs$teddy$intermed_out_dir, "/pheno_ctrls_ia.rds"))
+  paste0(study_specs$intermed_out_dir, "/pheno_ctrls_ia.rds"))
 
 # From step 02 - read in hypoth 1 results
 m1_dad <- read_csv(
@@ -100,11 +100,11 @@ m2_t1d_prog_intxn <- read_csv(
   "coxph_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_all_intxn.csv")
 
 # From TEDDY ancestry estimation
-pheno_raw <- read_tsv(study_specs$teddy$pheno_raw_path)
-gmm_pop <- read_delim(study_specs$teddy$ancestry_path)
+pheno_raw <- read_tsv(study_specs$pheno_raw_path)
+gmm_pop <- read_delim(study_specs$ancestry_path)
 
 # From T1D mom & T1D dad allele freq comparison
-risk_score_dir <- dirname(study_specs$teddy$grs2_path)
+risk_score_dir <- dirname(study_specs$grs2_path)
 af_fam_grs2x <- read_delim(
   paste0(risk_score_dir, "/afreq_by_fdr_grs2x.txt"),
   col_types = cols(.default = col_character()))
@@ -140,7 +140,6 @@ Boxplot of GRS2x scores and forest plot of model 1 results.
 # Prepping here for supplementary figure 1 as well
 pheno_all <- t_all %>%
   dplyr::select(fdr_4level, GRS2x, Non_HLA, IA, sex) %>%
-  dplyr::mutate(study = "TEDDY") %>%
   dplyr::mutate(fdr_4level = recode(
     fdr_4level,
     Mom = "Mother",
@@ -151,7 +150,6 @@ pheno_all <- t_all %>%
 
 pheno_ctrls <- t_ctrls_ia %>%
   dplyr::select(fdr_4level, GRS2x, Non_HLA, IA, sex) %>%
-  dplyr::mutate(study = "TEDDY") %>%
   dplyr::mutate(fdr_4level = recode(
     fdr_4level,
     Mom = "Mother",
@@ -242,7 +240,7 @@ f1 <- ggarrange(
 f1
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_1.pdf"),
+  paste0(study_specs$manuscript_out_dir, "/figures/fig_1.pdf"),
   f1, units = "in",  width = 7, height = 3, bg = "white")
 ```
 
@@ -256,7 +254,7 @@ to be written into manuscript draft (no table).
 m1_exp <- m1_dad %>%
   dplyr::mutate(model_type = "linear") %>%
   dplyr::relocate(model_type, .after = nobs) %>%
-  dplyr::select(-which_fdr, -study)
+  dplyr::select(-which_fdr)
 
 fdr <- c("mom", "sib", "none")
 cols_to_select <- c(
@@ -316,7 +314,7 @@ f1_a_abs <- ggplot(pheno_all_alt, aes(x = fdr_4level, y = GRS2x, fill = fdr_4lev
 f1_a_abs
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_1_a_graph_abstract.svg"),
+  paste0(study_specs$manuscript_out_dir, "/figures/fig_1_a_graph_abstract.svg"),
   f1_a_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 ```
 
@@ -386,7 +384,7 @@ dist_hypoth_abs <- ggplot(data_rand, aes(x = norm, fill = fdr_4level)) +
 dist_hypoth_abs
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/dist_hypoth_graph_abstract.svg"),
+  paste0(study_specs$manuscript_out_dir, "/figures/dist_hypoth_graph_abstract.svg"),
   dist_hypoth_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 
 ```
@@ -406,7 +404,7 @@ m2_merge <- dplyr::bind_rows(
     str_detect(form, "T1D,") ~ "T1D",
     str_detect(form, "fupT1D_prog") ~ "Progression",
     TRUE ~ outcome)) %>%
-  dplyr::select(-which_fdr, -study)
+  dplyr::select(-which_fdr)
 
 
 f2_a <- make_h2_forest_plot_manuscript(
@@ -462,7 +460,7 @@ f2 <- plot_grid(
 f2
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2.pdf"),
+  paste0(study_specs$manuscript_out_dir, "/figures/fig_2.pdf"),
   f2, units = "in",  width = 7, height = 5, bg = "white")
 
 ```
@@ -505,7 +503,7 @@ f2_a_abs <- make_h2_forest_plot_manuscript(
 f2_a_abs
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2_a_graph_abstract.svg"),
+  paste0(study_specs$manuscript_out_dir, "/figures/fig_2_a_graph_abstract.svg"),
   f2_a_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 ```
 
@@ -540,7 +538,7 @@ f2_b_abs <- f2_b_abs +
 f2_b_abs
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2_b_graph_abstract.svg"),
+  paste0(study_specs$manuscript_out_dir, "/figures/fig_2_b_graph_abstract.svg"),
   f2_b_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 ```
 
@@ -770,7 +768,7 @@ sf1 <- ggarrange(
 sf1
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/supp_fig_2.pdf"),
+  paste0(study_specs$manuscript_out_dir, "/figures/supp_fig_2.pdf"),
   sf1, units = "in",  width = 7, height = 6, bg = "white")
 
 ```
@@ -787,7 +785,7 @@ m2_female <- dplyr::bind_rows(
     str_detect(form, "T1D,") ~ "T1D",
     str_detect(form, "fupT1D_prog") ~ "Progression",
     TRUE ~ outcome)) %>%
-  dplyr::select(-which_fdr, -study)
+  dplyr::select(-which_fdr)
 m2_male <- dplyr::bind_rows(
   m2_male_ia,
   m2_male_t1d_prog) %>%
@@ -795,7 +793,7 @@ m2_male <- dplyr::bind_rows(
     str_detect(form, "T1D,") ~ "T1D",
     str_detect(form, "fupT1D_prog") ~ "Progression",
     TRUE ~ outcome)) %>%
-  dplyr::select(-which_fdr, -study)
+  dplyr::select(-which_fdr)
 
 # Get common limits
 get_max_hr <- function(data) {
@@ -843,7 +841,7 @@ sf2 <- ggarrange(
 sf2
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/supp_fig_3.pdf"),
+  paste0(study_specs$manuscript_out_dir, "/figures/supp_fig_3.pdf"),
   sf2, units = "in",  width = 7, height = 4, bg = "white")
 
 ```
@@ -983,7 +981,7 @@ t1_df_mod_exp <- t1_df_mod_exp[t1_df_mod_exp$label != "fupT1D", ]
 # Write out
 write_csv(
   t1_df_mod_exp,
-  paste0(study_specs$teddy$manuscript_out_dir, "/tables/table_1.csv"))
+  paste0(study_specs$manuscript_out_dir, "/tables/table_1.csv"))
 
 ```
 
@@ -1065,7 +1063,7 @@ colnames(af_fam_grs2x_src_test_exp) <- tolower(colnames(af_fam_grs2x_src_test_ex
 # Write Excel file
 write_csv(
   af_fam_grs2x_src_test_exp,
-  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_1.csv"))
+  paste0(study_specs$manuscript_out_dir, "/tables/supp_table_1.csv"))
 
 ```
 
@@ -1129,7 +1127,7 @@ colnames(m2_exp) <- gsub("\\.", "_", colnames(m2_exp))
 # Write Excel file
 write_csv(
   m2_exp,
-  paste0(study_specs$teddy$manuscript_out_dir, "/tables/supp_table_2.csv"))
+  paste0(study_specs$manuscript_out_dir, "/tables/supp_table_2.csv"))
 
 ```
 
@@ -1153,7 +1151,7 @@ Want to describe the Ns from each non-EUR 1000G population that were removed.
 ```{r, message = F}
 # Re-running part of the utils_teddy.R logic here, if more time, revisit and
 # re-work so can use function(s) here
-pheno_intermed <- prep_teddy_base(study_specs$teddy)
+pheno_intermed <- prep_teddy_base(study_specs)
 
 gmm_pop_filt <- gmm_pop %>%
   dplyr::filter(IID %in% pheno_intermed$ID)

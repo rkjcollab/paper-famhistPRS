@@ -15,7 +15,7 @@ knit: |
     rmarkdown::render(
       inputFile,
       encoding = encoding,
-      output_dir = study_specs$teddy$report_out_dir
+      output_dir = study_specs$report_out_dir
     )
   })
 ---
@@ -27,7 +27,7 @@ source(here("config.R"))
 
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
-  root.dir = study_specs$teddy$result_out_dir)
+  root.dir = study_specs$result_out_dir)
 
 library(tidyverse)
 library(conflicted)
@@ -202,7 +202,7 @@ prog_merge <- read_csv("coxph_T1D_prog_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
 
 
 #####  pheno files -------------------------------------------------------------
-pheno_ia_path <- paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_ia.rds")
+pheno_ia_path <- paste0(study_specs$intermed_out_dir, "/pheno_all_ia.rds")
 pheno_ia <- readRDS(pheno_ia_path)
 
 ```
@@ -527,24 +527,22 @@ pheno_ia_cens_path <- paste0(gsub("\\.rds", "", pheno_ia_path), "_cens_age6.rds"
 saveRDS(pheno_ia_cens, pheno_ia_cens_path)
 
 # Prep model options, running without GRS2x
-study <- "teddy"
 model <- "IA"
 engine <- "coxph_tt"
 tt_spec <- list(
   type = "linear",  # "log", "linear", "spline"
   var = "fdr_4level")
-specs <- study_specs[[study]]
 fdr_var <- config$fdr_var
 fdr_ref <- config$fdr_ref
 
-surv_def <- specs$surv_def[[model]]
+surv_def <- study_specs$surv_def[[model]]
 pheno <- pheno_ia_cens_path
 event <- surv_def$event
 time <- surv_def$time
-covs <- c(specs$surv_covs[[model]], "cluster(FID)")
+covs <- c(study_specs$surv_covs[[model]], "cluster(FID)")
 
 res_ia_cens <- run_model(
-  engine, model, study, pheno, event, time, covs, fdr_var, fdr_ref, tt_spec = tt_spec)
+  engine, model, pheno, event, time, covs, fdr_var, fdr_ref, tt_spec = tt_spec)
 
 # Save using same structure as script 03
 saveRDS(

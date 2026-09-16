@@ -6,7 +6,7 @@ library(coxme)
 # Note: pheno files must be set to have id = "ID"
 #' @export
 mod <- function(
-    study, pheno, kinship, outcome, covs, fdr_var, fdr_ref, wald_test = NULL) {
+    pheno, kinship, outcome, covs, fdr_var, fdr_ref, wald_test = NULL) {
   
   # Read in pheno
   pheno <- readRDS(pheno)
@@ -57,8 +57,7 @@ mod <- function(
   }
   
   # Get overall model values
-  results <- data.frame(study = study)
-  results$nobs = mod$n
+  results <- data.frame(nobs = mod$n)
   results$form = paste0(
     as.character(form)[2], as.character(form)[1], as.character(form)[3])
   results$which_fdr <- fdr_var

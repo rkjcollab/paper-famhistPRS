@@ -33,7 +33,7 @@ source(here("R/study_specs.R"))
 source(here("R/utils_pheno.R"))
 source(here("R/utils_teddy.R"))
 
-# TO NOTE: change study list and other settings in config.R
+# TO NOTE: change other settings in config.R
 
 # Define function --------------------------------------------------------------
 
@@ -42,24 +42,14 @@ source(here("R/utils_teddy.R"))
 # dr_filt is defined in config.R. Set to "yes" or "no" to filter
 # DR3/4, DR4/4, DR3/3 or DR4/X.
 
-make_pheno <- function(study, config) {
-  if (!study %in% names(study_specs)) {
-    stop("Unknown study: ", study)
-  }
-  specs <- study_specs[[study]]
-  
-  # Do study-specific prep
-  df <- switch(
-    study,
-    teddy = prep_teddy(specs),
-    stop("Unknown study")
-  )
-  message("Study: ", study)
+make_pheno <- function(config) {
+  # Do TEDDY-specific prep
+  df <- prep_teddy(study_specs)
   message("After prep: ", nrow(df))
-  
+
   # Do shared prep
   df <- set_factor_levels(df)
-  
+
   if (config$dr_filt == "yes") {
     df <- apply_dr_filt(df)
     dr_suffix <- "_dr_filt"
@@ -67,14 +57,13 @@ make_pheno <- function(study, config) {
   } else {
     dr_suffix <- ""
   }
-  
+
   # Write exports
   pheno_list <- make_exports(df)
-  
+
   write_phenos(
     pheno_list,
-    study = study,
-    out_prefix = specs$intermed_out_dir,
+    out_prefix = study_specs$intermed_out_dir,
     dr_suffix = dr_suffix
   )
 }
@@ -82,8 +71,4 @@ make_pheno <- function(study, config) {
 
 # Run function -----------------------------------------------------------------
 
-#TODO: switch to only single study?
-
-for (s in config$studies) {
-  make_pheno(s, config)
-}
+make_pheno(config)

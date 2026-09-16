@@ -82,7 +82,7 @@ make_exports <- function(df) {
   out
 }
 
-write_phenos <- function(pheno_list, study, out_prefix, dr_suffix) {
+write_phenos <- function(pheno_list, out_prefix, dr_suffix) {
   dir.create(out_prefix, recursive = TRUE, showWarnings = FALSE)
 
   for (nm in names(pheno_list)) {

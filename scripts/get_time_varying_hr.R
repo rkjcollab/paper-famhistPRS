@@ -9,7 +9,7 @@ source(here("R/study_specs.R"))
 source(here("R/utils_coxph_tt_hr.R"))
 library(tidyverse)
 
-result_dir <- study_specs$teddy$result_out_dir
+result_dir <- study_specs$result_out_dir
 
 model <- readRDS(paste0(
   result_dir,

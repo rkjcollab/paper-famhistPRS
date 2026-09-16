@@ -1,7 +1,7 @@
 
 #' @export
 mod_coxme <- function(
-    study, pheno, kinship, outcome, time, covs, fdr_var, fdr_ref,
+    pheno, kinship, outcome, time, covs, fdr_var, fdr_ref,
     wald_test = NULL) {
   
   ### Prep
@@ -61,8 +61,7 @@ mod_coxme <- function(
   }
   
   # Get overall model values
-  results <- data.frame(study = study)
-  results$outcome <- outcome
+  results <- data.frame(outcome = outcome)
   results$nobs = mod$n[2]  # get total N, not just cases
   results$form = paste0(
     as.character(form)[2], as.character(form)[1], as.character(form)[3])
