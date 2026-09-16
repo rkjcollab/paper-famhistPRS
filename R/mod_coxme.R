@@ -1,4 +1,3 @@
-#' @export
 mod_coxme <- function(
   pheno, kinship, outcome, time, covs, fdr_var, fdr_ref,
   wald_test = NULL

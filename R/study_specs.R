@@ -2,8 +2,7 @@
 
 base_dir <- Sys.getenv("RKJCOLLAB")
 
-#' Study-specific paths and settings
-#' @export
+# Study-specific paths and settings
 study_specs <- list(
   # Label used in output file names
   study = "teddy",

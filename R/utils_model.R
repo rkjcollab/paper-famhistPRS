@@ -1,4 +1,3 @@
-#' @export
 run_model <- function(
   engine, model, pheno, event, time, covs, fdr_var, fdr_ref,
   wald_test = NULL, kinship = NULL, tt_spec = NULL

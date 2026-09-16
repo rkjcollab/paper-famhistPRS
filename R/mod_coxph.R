@@ -18,7 +18,6 @@
 # that call?
 
 # Automatically includes cluster(FID)
-#' @export
 mod_coxph <- function(
   pheno, outcome, time, covs, fdr_var, fdr_ref, wald_test = NULL
 ) {
@@ -225,7 +224,6 @@ build_tt <- function(type, pheno, time, outcome, n_knots = NA, df = NA) {
   list(fun = tt_fun, knots = knots, boundary = boundary)
 }
 
-#' @export
 mod_coxph_tt <- function(
   pheno, outcome, time, covs, fdr_var, fdr_ref, tt_spec,
   wald_test = NULL

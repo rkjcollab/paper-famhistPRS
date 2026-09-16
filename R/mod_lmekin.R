@@ -4,7 +4,6 @@ library(coxme)
 # fdr_ref <- config$fdr_ref
 
 # Note: pheno files must be set to have id = "ID"
-#' @export
 mod <- function(
   pheno, kinship, outcome, covs, fdr_var, fdr_ref, wald_test = NULL
 ) {
