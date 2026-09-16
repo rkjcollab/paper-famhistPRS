@@ -316,7 +316,7 @@ f1_a_abs <- ggplot(pheno_all_alt, aes(x = fdr_4level, y = GRS2x, fill = fdr_4lev
 f1_a_abs
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_1_a_graph_abstract.png"),
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_1_a_graph_abstract.svg"),
   f1_a_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 ```
 
@@ -386,7 +386,7 @@ dist_hypoth_abs <- ggplot(data_rand, aes(x = norm, fill = fdr_4level)) +
 dist_hypoth_abs
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/dist_hypoth_graph_abstract.png"),
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/dist_hypoth_graph_abstract.svg"),
   dist_hypoth_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 
 ```
@@ -505,7 +505,7 @@ f2_a_abs <- make_h2_forest_plot_manuscript(
 f2_a_abs
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2_a_graph_abstract.png"),
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2_a_graph_abstract.svg"),
   f2_a_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 ```
 
@@ -540,7 +540,7 @@ f2_b_abs <- f2_b_abs +
 f2_b_abs
 
 ggsave(
-  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2_b_graph_abstract.png"),
+  paste0(study_specs$teddy$manuscript_out_dir, "/figures/fig_2_b_graph_abstract.svg"),
   f2_b_abs, units = "in",  width = 3, height = 2.2, bg = "white")
 ```
 
