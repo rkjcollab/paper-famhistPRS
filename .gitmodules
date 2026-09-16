@@ -1,0 +1,3 @@
+[submodule "PRSedm"]
+	path = PRSedm
+	url = git@github.com:sethsh7/PRSedm.git
