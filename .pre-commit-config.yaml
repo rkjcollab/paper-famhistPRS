@@ -1,0 +1,25 @@
+repos:
+  # Cross-language hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+
+  # R hooks
+  - repo: local
+    hooks:
+    - id: style-files
+      name: Style R files
+      entry: Rscript -e "styler::style_file(commandArgs(trailingOnly = TRUE))"
+      language: system
+      types: [r]
+
+    - id: lintr
+      name: Lint R files
+      entry: Rscript -e "lapply(commandArgs(trailingOnly = TRUE), lintr::lint)"
+      language: system
+      types: [r]
