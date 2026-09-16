@@ -1,11 +1,9 @@
-Package: famhistPRS
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
+Package: paper-famhistPRS
+Title: Paper compendium for the famhistPRS manuscript.
+Version: 1.0.0
 Authors@R:
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+    person("Sarah", "Slack", , "sarah.slack@cuanschutz.edu", role = c("aut", "cre"))
+Description: Code and computational environment for reproducing the analyses
+    and results in the famhistPRS manuscript.
+License: MIT + file LICENSE
 Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
