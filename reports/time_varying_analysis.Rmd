@@ -1,5 +1,5 @@
 ---
-title: "MatProt PRS Time-Varying Analysis"
+title: "famhistPRS Time-Varying Analysis"
 author: "SDS"
 date: "Last compiled on `r Sys.Date()`"
 output: 
