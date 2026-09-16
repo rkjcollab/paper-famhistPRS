@@ -6,25 +6,25 @@
 # immuno_t1d/pheno/make-pheno-file-teddy-r01.R
 
 # Shared criteria:
-  # Have eligible HLA
-  # From one of six primary clinical centers
+# Have eligible HLA
+# From one of six primary clinical centers
 
 # Additional analytical criteria
-  # Have exome chip data - based on anc_d & anc_t inputs
-  # Have primarily European ancestry
-  # Have only one or no first-degree relatives with T1D
-  # One genetically-identical twin removed at random
-  # OPTIONAL: have only HLA DR3/4, DR4/4, DR3/3 or DR4/X
+# Have exome chip data - based on anc_d & anc_t inputs
+# Have primarily European ancestry
+# Have only one or no first-degree relatives with T1D
+# One genetically-identical twin removed at random
+# OPTIONAL: have only HLA DR3/4, DR4/4, DR3/3 or DR4/X
 
 # Additional notes
-  # Run analysis two ways: in everyone and in controls (no IA or T1D) only
-  # Include 3- and 4-level FDR (dad/sib combined & separated)
-  # Write out separate analytical pheno file for each outcome & subset
-  # OPTIONAL: sex-stratified analyses
+# Run analysis two ways: in everyone and in controls (no IA or T1D) only
+# Include 3- and 4-level FDR (dad/sib combined & separated)
+# Write out separate analytical pheno file for each outcome & subset
+# OPTIONAL: sex-stratified analyses
 
 # Setup ------------------------------------------------------------------------
 
-#TODO: need to update for split to two functions in utils_teddy.R
+# TODO: need to update for split to two functions in utils_teddy.R
 
 library(here)
 

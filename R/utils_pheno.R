@@ -10,15 +10,15 @@ set_factor_levels <- function(data) {
       fdr_3level = relevel(factor(fdr_3level), ref = "None"),
       HLAGRP = relevel(factor(HLAGRP), ref = "DR4/X")
     )
-  
+
   if ("cc" %in% names(data)) {
     data$cc <- relevel(factor(data$cc), ref = 1)
   }
-  
+
   if ("fdr_4level" %in% names(data)) {
     data$fdr_4level <- relevel(factor(data$fdr_4level), ref = "None")
   }
-  
+
   data
 }
 
@@ -30,8 +30,7 @@ apply_dr_filt <- function(data) {
 
 # Functions for subsetting exports based on outcome
 get_all <- function(df, outcome) {
-  switch(
-    outcome,
+  switch(outcome,
     IA = df %>% filter(!is.na(IA)),
     T1D = df %>% filter(!is.na(T1D)),
     T1D_prog = df %>% filter(!is.na(fupT1D_prog))
@@ -40,8 +39,7 @@ get_all <- function(df, outcome) {
 
 # Functions for subsetting exports to controls only
 get_controls <- function(df, outcome) {
-  switch(
-    outcome,
+  switch(outcome,
     IA = df %>% filter(IA == 0 & (T1D == 0 | is.na(T1D))),
     T1D = df %>% filter(T1D == 0),
     T1D_prog = df %>% filter(T1D == 0)

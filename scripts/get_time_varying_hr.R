@@ -13,10 +13,12 @@ result_dir <- study_specs$result_out_dir
 
 model <- readRDS(paste0(
   result_dir,
-  "/model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"))
+  "/model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+))
 model <- readRDS(paste0(
   result_dir,
-  "/model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"))
+  "/model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+))
 
 # Get PH over time -------------------------------------------------------------
 
@@ -26,8 +28,8 @@ tt_hr <- get_tt_hr(
   levels = c("None", "Mom", "Sib"),
   ref_label = "Dad",
   times = seq(0, 16, 0.5),
-  time_transform = identity)
+  time_transform = identity
+)
 
 
-#TODO: add write out of results
-
+# TODO: add write out of results

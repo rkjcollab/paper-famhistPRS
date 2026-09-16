@@ -25,7 +25,8 @@ snp_id <- snp_list %>%
 readr::write_tsv(
   snp_id,
   paste0(risk_score_dir, "/grs2x_snp_ids.txt"),
-  col_names = FALSE)
+  col_names = FALSE
+)
 
 # Run PLINK --------------------------------------------------------------------
 
@@ -33,6 +34,7 @@ plink_args <- c(
   "--pfile", study_specs$plink_path,
   "--extract", paste0(risk_score_dir, "/grs2x_snp_ids.txt"),
   "--make-pgen",
-  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x"))
+  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x")
+)
 
 system2(plink, plink_args)

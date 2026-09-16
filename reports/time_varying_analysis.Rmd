@@ -2,7 +2,7 @@
 title: "famhistPRS Time-Varying Analysis"
 author: "SDS"
 date: "Last compiled on `r Sys.Date()`"
-output: 
+output:
   html_document:
     toc: true
     toc_float: true
@@ -27,13 +27,13 @@ source(here("config.R"))
 
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
-  root.dir = study_specs$result_out_dir)
+  root.dir = study_specs$result_out_dir
+)
 
 library(tidyverse)
 library(conflicted)
 library(survival)
 library(survminer)
-
 ```
 
 
@@ -52,7 +52,7 @@ Approach:
   coxme() models with kinship. Note that cox.zph doesn't check random effects
   for hazards.
 2. For models where fdr_4level violates proportional hazards assumption (IA)
-  add time-varying component for fdr_4level to model. 
+  add time-varying component for fdr_4level to model.
   + Because doing this in  coxme() framework using an interaction between
     fdr_4level and time caused models not to converge, primary analysis was
     shifted to using coxph() with a cluster on family ID.
@@ -80,89 +80,121 @@ outcome_order <- c("IA", "Progression", "T1D")
 #####  coxme model objects -----------------------------------------------------
 ### IA
 mc_ia <- readRDS(
-  "model_objects/coxme_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc_teddy_all.rds")
+  "model_objects/coxme_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc_teddy_all.rds"
+)
 mc_ia_g <- readRDS(
-  "model_objects/coxme_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-GRS2x_teddy_all.rds")
+  "model_objects/coxme_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-GRS2x_teddy_all.rds"
+)
 
 ### T1D
 mc_t1d <- readRDS(
-  "model_objects/coxme_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc_teddy_all.rds")
+  "model_objects/coxme_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc_teddy_all.rds"
+)
 mc_t1d_g <- readRDS(
-  "model_objects/coxme_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-GRS2x_teddy_all.rds")
+  "model_objects/coxme_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-GRS2x_teddy_all.rds"
+)
 
 ### T1D prog
 mc_t1dprog <- readRDS(
-  "model_objects/coxme_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-fupIA-mAA_at_IA_teddy_all.rds")
+  "model_objects/coxme_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-fupIA-mAA_at_IA_teddy_all.rds"
+)
 mc_t1dprog_g <- readRDS(
-  "model_objects/coxme_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-fupIA-mAA_at_IA-GRS2x_teddy_all.rds")
+  "model_objects/coxme_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-fupIA-mAA_at_IA-GRS2x_teddy_all.rds"
+)
 
 
 #####  coxph model objects -----------------------------------------------------
 ### IA
 # No time-varying
 m_ia <- readRDS(
-  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_g <- readRDS(
-  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 # Linear time transform
 m_ia_lin <- readRDS(
-  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_lin_g <- readRDS(
-  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 # Log time transform
 m_ia_log <- readRDS(
-  "model_objects/coxph_tt_log_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_log_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_log_g <- readRDS(
-  "model_objects/coxph_tt_log_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_log_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 # Spline time transform, with knots informed by PMID 25883970
 m_ia_spline_3 <- readRDS(
-  "model_objects/coxph_tt_spline_3knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_spline_3knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_spline_3_g <- readRDS(
-  "model_objects/coxph_tt_spline_3knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_spline_3knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 # Spline time transform, with knots informed by PMID 25883970
 m_ia_spline_5 <- readRDS(
-  "model_objects/coxph_tt_spline_5knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_spline_5knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_spline_5_g <- readRDS(
-  "model_objects/coxph_tt_spline_5knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_spline_5knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 # Spline time transform, with knots auto-determined (equally spaced quantiles)
 m_ia_spline_d2 <- readRDS(
-  "model_objects/coxph_tt_spline_2df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_spline_2df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_spline_d2_g <- readRDS(
-  "model_objects/coxph_tt_spline_2df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_spline_2df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 m_ia_spline_d3 <- readRDS(
-  "model_objects/coxph_tt_spline_3df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_spline_3df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_spline_d3_g <- readRDS(
-  "model_objects/coxph_tt_spline_3df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_spline_3df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 m_ia_spline_d4 <- readRDS(
-  "model_objects/coxph_tt_spline_4df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_spline_4df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_spline_d4_g <- readRDS(
-  "model_objects/coxph_tt_spline_4df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_spline_4df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 m_ia_spline_d6 <- readRDS(
-  "model_objects/coxph_tt_spline_6df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_spline_6df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_spline_d6_g <- readRDS(
-  "model_objects/coxph_tt_spline_6df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_spline_6df_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 # Spline time transform, with single knot chosen based on knowledge of data
 # and prior literature
 m_ia_spline_1 <- readRDS(
-  "model_objects/coxph_tt_spline_1knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_tt_spline_1knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_ia_spline_1_g <- readRDS(
-  "model_objects/coxph_tt_spline_1knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_tt_spline_1knots_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 
 ### T1D
 m_t1d <- readRDS(
-  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+)
 m_t1d_g <- readRDS(
-  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+)
 m_t1d_strat <- readRDS(
-  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-strata(sex)-strata(cc)-cluster(FID)_teddy_all.rds")
+  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-strata(sex)-strata(cc)-cluster(FID)_teddy_all.rds"
+)
 m_t1d_g_strat <- readRDS(
-  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-strata(sex)-strata(cc)-cluster(FID)-GRS2x_teddy_all.rds")
+  "model_objects/coxph_T1D_fdr_dad_ref_fdr_4level-PC1-PC2-strata(sex)-strata(cc)-cluster(FID)-GRS2x_teddy_all.rds"
+)
 
 ### T1D prog
 m_t1dprog <- readRDS(
-  "model_objects/coxph_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-fupIA-mAA_at_IA_teddy_all.rds")
+  "model_objects/coxph_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-fupIA-mAA_at_IA_teddy_all.rds"
+)
 m_t1dprog_g <- readRDS(
-  "model_objects/coxph_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-fupIA-mAA_at_IA-GRS2x_teddy_all.rds")
+  "model_objects/coxph_T1D_prog_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-fupIA-mAA_at_IA-GRS2x_teddy_all.rds"
+)
 
 
 #####  model result files ------------------------------------------------------
@@ -180,7 +212,8 @@ ia_log <- read_csv("coxph_tt_log_fdr_4level_IA_fdr_dad_ref_GRS2x_teddy_all.csv")
 ia_spline_3knots <- read_csv("coxph_tt_spline_3knots_fdr_4level_IA_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
   dplyr::mutate(model = paste0(outcome, ifelse(is.na(term), "", paste0("-", term)), "-spline-3knots"))
 ia_merge <- bind_rows(
-  ia, ia_lin, ia_log, ia_spline_3knots) %>%
+  ia, ia_lin, ia_log, ia_spline_3knots
+) %>%
   dplyr::relocate(model) %>%
   distinct(across(-model), .keep_all = TRUE)
 
@@ -190,9 +223,12 @@ t1d <- read_csv("coxph_T1D_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
 t1d_strat <- read_csv("coxph_T1D_fdr_dad_ref_GRS2x_strata_teddy_all.csv") %>%
   dplyr::mutate(
     model = paste0(
-      outcome, ifelse(is.na(term), "", paste0("-", term)), "-strat"))
+      outcome, ifelse(is.na(term), "", paste0("-", term)), "-strat"
+    )
+  )
 t1d_merge <- bind_rows(
-  t1d, t1d_strat) %>%
+  t1d, t1d_strat
+) %>%
   dplyr::relocate(model) %>%
   distinct(across(-model), .keep_all = TRUE)
 
@@ -204,7 +240,6 @@ prog_merge <- read_csv("coxph_T1D_prog_fdr_dad_ref_GRS2x_teddy_all.csv") %>%
 #####  pheno files -------------------------------------------------------------
 pheno_ia_path <- paste0(study_specs$intermed_out_dir, "/pheno_all_ia.rds")
 pheno_ia <- readRDS(pheno_ia_path)
-
 ```
 
 
@@ -218,17 +253,13 @@ pheno_ia <- readRDS(pheno_ia_path)
 
 
 ```{r out.width = '50%', fig.show = 'hold'}
-
 zph_ia <- show_cox_zph(m_ia)
-
 ```
 
 ### **With GRS2x**
 
 ```{r out.width = '50%', fig.show = 'hold'}
-
 zph_ia_g <- show_cox_zph(m_ia_g)
-
 ```
 
 ### **Models with tt()**
@@ -249,7 +280,8 @@ AIC(
   m_ia, m_ia_g, m_ia_lin, m_ia_lin_g, m_ia_log, m_ia_log_g,
   m_ia_spline_3, m_ia_spline_3_g, m_ia_spline_5, m_ia_spline_5_g,
   m_ia_spline_d2, m_ia_spline_d2_g, m_ia_spline_d3, m_ia_spline_d3_g,
-  m_ia_spline_d4, m_ia_spline_d4_g, m_ia_spline_d6, m_ia_spline_d6_g)
+  m_ia_spline_d4, m_ia_spline_d4_g, m_ia_spline_d6, m_ia_spline_d6_g
+)
 ```
 
 ```{r}
@@ -264,40 +296,32 @@ than log time.
 ### **No GRS2x**
 
 ```{r out.width = '50%', fig.show = 'hold'}
-
 zph_t1d <- show_cox_zph(m_t1d)
-
 ```
 
 
 ### **With GRS2x**
 
 ```{r out.width = '50%', fig.show = 'hold'}
-
 zph_t1d_g <- show_cox_zph(m_t1d_g)
-
 ```
 
 
 ### **No GRS2x, With Strata**
 
 ```{r out.width = '50%', fig.show = 'hold'}
-
 zph_t1d_strat <- show_cox_zph(m_t1d_strat)
-
 ```
 
 
 ### **With GRS2x, With Strata**
 
 ```{r out.width = '50%', fig.show = 'hold'}
-
 zph_t1d_g_strat <- show_cox_zph(m_t1d_g_strat)
-
 ```
 
 
-Adding the strata resolve PH violation in PC1. 
+Adding the strata resolve PH violation in PC1.
 
 
 ## **T1D Progression**
@@ -305,23 +329,18 @@ Adding the strata resolve PH violation in PC1.
 ### **No GRS2x**
 
 ```{r out.width = '50%', fig.show = 'hold'}
-
 zph_t1dprog <- show_cox_zph(m_t1dprog)
-
 ```
 
 ### **With GRS2x**
 
 ```{r out.width = '50%', fig.show = 'hold'}
-
 zph_t1dprog_g <- show_cox_zph(m_t1dprog_g)
-
 ```
 
 ## **Summary - ZPH P-Values All Models**
 
 ```{r}
-
 result <- bind_rows(
   zph_ia %>% dplyr::mutate(model = "IA"),
   zph_ia_g %>% dplyr::mutate(model = "IA-GRS2x"),
@@ -337,7 +356,6 @@ result <- result %>% relocate(model, GLOBAL)
 result
 
 write_tsv(result, "summary_coxzph.txt")
-
 ```
 
 
@@ -351,8 +369,9 @@ ia_merge <- ia_merge %>%
   dplyr::mutate(model = factor(model), levels = c(
     "IA", "IA-GRS2x",
     "IA-lin", "IA-GRS2x-lin",
-    "IA-log", "IA-GRS2x-log", 
-    "IA-spline-3knots", "IA-GRS2x-spline-3knots")) %>%
+    "IA-log", "IA-GRS2x-log",
+    "IA-spline-3knots", "IA-GRS2x-spline-3knots"
+  )) %>%
   dplyr::mutate(model_group = case_when(
     model == "IA" | model == "IA-GRS2x" ~ "IA",
     model == "IA-lin" | model == "IA-GRS2x-lin" ~ "IA-lin",
@@ -364,7 +383,8 @@ ia_merge <- ia_merge %>%
 make_h2_forest_plot(
   data = ia_merge,
   ref = "dad",
-  fdr_order, outcome_order)
+  fdr_order, outcome_order
+)
 ```
 
 
@@ -374,7 +394,8 @@ make_h2_forest_plot(
 t1d_merge <- t1d_merge %>%
   dplyr::mutate(model = factor(model), levels = c(
     "T1D", "T1D-GRS2x",
-    "T1D-strat", "T1D-GRS2x-strat")) %>%
+    "T1D-strat", "T1D-GRS2x-strat"
+  )) %>%
   dplyr::mutate(model_group = case_when(
     model == "T1D" | model == "T1D-GRS2x" ~ "T1D",
     model == "T1D-strat" | model == "T1D-GRS2x-strat" ~ "T1D-strat"
@@ -384,7 +405,8 @@ t1d_merge <- t1d_merge %>%
 make_h2_forest_plot(
   data = t1d_merge,
   ref = "dad",
-  fdr_order, outcome_order)
+  fdr_order, outcome_order
+)
 ```
 
 
@@ -393,7 +415,8 @@ make_h2_forest_plot(
 ```{r}
 prog_merge <- prog_merge %>%
   dplyr::mutate(model = factor(model), levels = c(
-    "T1D", "T1D-GRS2x")) %>%
+    "T1D", "T1D-GRS2x"
+  )) %>%
   dplyr::mutate(model_group = case_when(
     model == "T1D" | model == "T1D-GRS2x" ~ "T1D",
   ))
@@ -402,7 +425,8 @@ prog_merge <- prog_merge %>%
 make_h2_forest_plot(
   data = prog_merge,
   ref = "dad",
-  fdr_order, outcome_order)
+  fdr_order, outcome_order
+)
 ```
 
 # **Plot IA Hazard Over Time**
@@ -417,13 +441,14 @@ lin_tt <- get_tt_hr(
   var = "fdr_4level",
   levels = c("None", "Mom", "Sib"),
   ref_label = "Dad",
-  time_transform = identity)
+  time_transform = identity
+)
 
 plot_tt_hr(
   data = lin_tt,
   var = "fdr_4level",
-  ref_label = "Dad")
-
+  ref_label = "Dad"
+)
 ```
 
 ```{r}
@@ -432,12 +457,14 @@ lin_g_tt <- get_tt_hr(
   var = "fdr_4level",
   levels = c("None", "Mom", "Sib"),
   ref_label = "Dad",
-  time_transform = identity)
+  time_transform = identity
+)
 
 plot_tt_hr(
   data = lin_g_tt,
   var = "fdr_4level",
-  ref_label = "Dad")
+  ref_label = "Dad"
+)
 ```
 
 
@@ -449,13 +476,14 @@ log_tt <- get_tt_hr(
   var = "fdr_4level",
   levels = c("None", "Mom", "Sib"),
   ref_label = "Dad",
-  time_transform = log)
+  time_transform = log
+)
 
 plot_tt_hr(
   data = log_tt,
   var = "fdr_4level",
-  ref_label = "Dad")
-
+  ref_label = "Dad"
+)
 ```
 
 ```{r}
@@ -464,12 +492,14 @@ log_g_tt <- get_tt_hr(
   var = "fdr_4level",
   levels = c("None", "Mom", "Sib"),
   ref_label = "Dad",
-  time_transform = log)
+  time_transform = log
+)
 
 plot_tt_hr(
   data = log_g_tt,
   var = "fdr_4level",
-  ref_label = "Dad")
+  ref_label = "Dad"
+)
 ```
 
 
@@ -486,13 +516,14 @@ spline_tt <- get_tt_hr_spline(
   levels = c("None", "Mom", "Sib"),
   ref_label = "Dad",
   knots = m_ia_spline_3$tt_meta$knots,
-  boundary = m_ia_spline_3$tt_meta$boundary)
+  boundary = m_ia_spline_3$tt_meta$boundary
+)
 
 plot_tt_hr(
   data = spline_tt,
   var = "fdr_4level",
-  ref_label = "Dad")
-
+  ref_label = "Dad"
+)
 ```
 
 ```{r}
@@ -502,13 +533,14 @@ spline_tt_g <- get_tt_hr_spline(
   levels = c("None", "Mom", "Sib"),
   ref_label = "Dad",
   knots = m_ia_spline_3_g$tt_meta$knots,
-  boundary = m_ia_spline_3_g$tt_meta$boundary)
+  boundary = m_ia_spline_3_g$tt_meta$boundary
+)
 
 plot_tt_hr(
   data = spline_tt_g,
   var = "fdr_4level",
-  ref_label = "Dad")
-
+  ref_label = "Dad"
+)
 ```
 
 
@@ -530,8 +562,9 @@ saveRDS(pheno_ia_cens, pheno_ia_cens_path)
 model <- "IA"
 engine <- "coxph_tt"
 tt_spec <- list(
-  type = "linear",  # "log", "linear", "spline"
-  var = "fdr_4level")
+  type = "linear", # "log", "linear", "spline"
+  var = "fdr_4level"
+)
 fdr_var <- config$fdr_var
 fdr_ref <- config$fdr_ref
 
@@ -542,16 +575,19 @@ time <- surv_def$time
 covs <- c(study_specs$surv_covs[[model]], "cluster(FID)")
 
 res_ia_cens <- run_model(
-  engine, model, pheno, event, time, covs, fdr_var, fdr_ref, tt_spec = tt_spec)
+  engine, model, pheno, event, time, covs, fdr_var, fdr_ref,
+  tt_spec = tt_spec
+)
 
 # Save using same structure as script 03
 saveRDS(
   res_ia_cens$model_obj,
-  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all_cens_age6.rds")
+  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all_cens_age6.rds"
+)
 write_csv(
   res_ia_cens$result_df,
-  "coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_GRS2x_teddy_all_cens_age6.csv")
-
+  "coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_GRS2x_teddy_all_cens_age6.csv"
+)
 ```
 
 ```{r}
@@ -560,8 +596,8 @@ make_h2_forest_plot(
     dplyr::mutate(model = "IA") %>%
     dplyr::mutate(model_group = "IA"),
   ref = "dad",
-  fdr_order, outcome_order)
-
+  fdr_order, outcome_order
+)
 ```
 
 
@@ -569,5 +605,4 @@ make_h2_forest_plot(
 
 ```{r session_info}
 sessionInfo()
-
 ```

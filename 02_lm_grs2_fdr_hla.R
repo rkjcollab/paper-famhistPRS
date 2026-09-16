@@ -17,8 +17,8 @@ source(here("config.R"))
 
 # TO NOTE: change this step's specific settings here, all other settings in
 # config.R
-outcome <- "GRS2x"  # can be GRS2x or Non_HLA
-covs = c("fdr_4level", "PC1", "PC2", "sex", "cc")
+outcome <- "GRS2x" # can be GRS2x or Non_HLA
+covs <- c("fdr_4level", "PC1", "PC2", "sex", "cc")
 
 # Define function --------------------------------------------------------------
 
@@ -31,14 +31,17 @@ run_model <- function(config) {
       "lm_", outcome,
       "_fdr_", tolower(config$fdr_ref), "_ref",
       dr_suffix, "_", study_specs$study, "_",
-      config$subset, ".csv"))
+      config$subset, ".csv"
+    )
+  )
 
   # Get input paths
   # TODO: bring back option to run in cases & controls in same script?
   kinship <- study_specs$kinship_path
   # Okay to use IA or T1D pheno since both have all participants
-  pheno = paste0(
-    study_specs$intermed_out_dir, paste0("/pheno_", config$subset, "_ia", dr_suffix, ".rds"))
+  pheno <- paste0(
+    study_specs$intermed_out_dir, paste0("/pheno_", config$subset, "_ia", dr_suffix, ".rds")
+  )
 
   # Run model
   message(paste0("Running model for ", config$subset, " & outcome = ", outcome, "."))

@@ -33,15 +33,17 @@ study_specs <- list(
   manuscript_out_dir = paste0(base_dir, "/Maternal_Protection/dissemination/famhist_prs_paper"),
 
   # Settings for survival model in script 03
-  #TODO: how to keep track of this version as well as primary without
+  # TODO: how to keep track of this version as well as primary without
   # interaction in final makefile?
-  #TODO: how to run interaction when Wald test for fdr fails with it?
+  # TODO: how to run interaction when Wald test for fdr fails with it?
   surv_def = list(
     IA = list(time = "fupIA", event = "IA"),
     T1D = list(time = "fupT1D", event = "T1D"),
-    T1D_prog = list(time = "fupT1D_prog", event = "T1D")),
+    T1D_prog = list(time = "fupT1D_prog", event = "T1D")
+  ),
   surv_covs = list(
     IA = c("fdr_4level", "sex", "PC1", "PC2", "cc"),
     T1D = c("fdr_4level", "sex", "PC1", "PC2", "cc"),
-    T1D_prog = c("fdr_4level", "sex", "PC1", "PC2", "cc", "fupIA", "mAA_at_IA"))
+    T1D_prog = c("fdr_4level", "sex", "PC1", "PC2", "cc", "fupIA", "mAA_at_IA")
+  )
 )

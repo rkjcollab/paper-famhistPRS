@@ -2,7 +2,7 @@
 
 This repository was dervied from the internal project: https://github.com/rkjcollab/explore_matprot,
 specifically from the genetics/famhistPRS/ subdirectory at tag paper-release-famhistPRS and commit 8765959.
-The code was extracted using git subtree split to preserve history. 
+The code was extracted using git subtree split to preserve history.
 
 This repository contains the analysis code for a manuscript evaluating whether type 1 diabetes polygenic risk scores explain first-degree relative patterns in TEDDY and related analyses.
 
