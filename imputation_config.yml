@@ -1,0 +1,43 @@
+# This is the only file that should be edited to run imputation using the snakemake_imputation
+# repo. A new config file should be made for each different imputation.
+
+### TODO: Update pipeline settings
+# Default filters of MAF 0 and Rsq 0.3 are applied after imputation.
+chr: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,X,Y]  # list of chromosome numbers with format [1,10,22]
+orig_build: "hg19"  #  either "hg19" or "hg38"
+to_build: "hg38"  # either "hg19" or "hg38"
+imp: "topmed"  # should be 'topmed', 'mich_hla_v1', 'mich_hla_v2', 'mich_1kg_p3_v5', 'mich_hrc'
+imp_rsq_filt: "0"  # filter to apply on imputation server (0, 0.001, 0.1, 0.2, or 0.3)
+imp_name: "teddy_r01_exome_full_qc"  # job name for imputation server
+imp_job_id: "job-20251108-160707-854"  # should be "job-####-##-###"
+zip_pw: "bqjr)E58TMj3RL"  # add from email when imputed job finishes
+opt: "gt"  # option for "gt" only or "all" dosage information (much slower)
+# use_cont: false  # true to use container, false to use local machine
+use_cont: true  # for final Alpine step
+sexcheck: [0.8, 0.35]  # DEFAULT: [0.8, 0.2]
+
+### TODO: Update host paths outside container
+# PLINK1.9 file prefix with path - must be single file, but can contain one or more chr
+# plink_prefix: "/Users/slacksa/Library/CloudStorage/OneDrive-TheUniversityofColoradoDenver/Immunogenetics_T1D/raw/teddy_r01/2025-03-05/OmicsDatasets/t1dexome_masked"
+plink_prefix: "/scratch/alpine/sslack@xsede.org/immunogenetics_t1d/teddy_r01/tm_r3_imp/exome_chip/full_qc"
+
+# OPTIONAL: ID list (FID IID) want to run imputation for
+# commented out for final Alpine step
+# id_list: "/Users/slacksa/Library/CloudStorage/OneDrive-TheUniversityofColoradoDenver/Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc/samples_to_keep_id_list.txt"
+
+# OPTIONAL: ID list to calculate HWE filtering in (likely controls)
+# id_list_hwe: "/Users/slacksa/Library/CloudStorage/OneDrive-TheUniversityofColoradoDenver/Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc/ctrls_id_list.txt"
+
+# Top-level directory for all output
+# out_dir: "/Users/slacksa/Library/CloudStorage/OneDrive-TheUniversityofColoradoDenver/Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc"
+out_dir: "/scratch/alpine/sslack@xsede.org/immunogenetics_t1d/teddy_r01/tm_r3_imp/exome_chip/full_qc"  # for final Alpine step
+
+# Repo with snakemake pipeline
+# repo: "/Users/slacksa/repos/imputation"
+repo: "/projects/sslack@xsede.org/repos/imputation"  # for final Alpine step
+
+### Container paths - should not be changed
+plink_dir_cont: "/input_data"
+id_list_hwe_dir_cont: "/id_list"
+out_dir_cont: "/output_data"
+repo_cont: "/repo"
