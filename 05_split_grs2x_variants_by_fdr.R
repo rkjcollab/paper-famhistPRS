@@ -2,8 +2,6 @@
 # fathers, and siblings and run chi-square test on allele frequencies in each
 # group versus fathers. Not used for GRS2x score generation.
 
-# Script "extract_grs2x_variants.R" should be run once before this one.
-
 # Setup ------------------------------------------------------------------------
 
 library(here)
