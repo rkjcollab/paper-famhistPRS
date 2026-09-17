@@ -7,3 +7,28 @@ Description: Code and computational environment for reproducing the analyses
     and results in the famhistPRS manuscript.
 License: MIT + file LICENSE
 Encoding: UTF-8
+Imports:
+    car,
+    coxme,
+    colorspace,
+    conflicted,
+    cowplot,
+    dplyr,
+    ggpubr,
+    GMMAT,
+    here,
+    khroma,
+    readr,
+    readxl,
+    rstatix,
+    splines,
+    survival,
+    survminer,
+    table1,
+    tibble,
+    tidyverse,
+    devtools,
+    knitr,
+    lintr,
+    rmarkdown,
+    styler
