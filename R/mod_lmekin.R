@@ -1,5 +1,3 @@
-library(coxme)
-
 # fdr_var <- config$fdr_var
 # fdr_ref <- config$fdr_ref
 

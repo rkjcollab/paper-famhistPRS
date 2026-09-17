@@ -1,5 +1,3 @@
-library(dplyr)
-
 set_factor_levels <- function(data) {
   # Keep outcomes as 0/1 for coxme/surv
   data <- data %>%
