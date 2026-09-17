@@ -36,8 +36,6 @@ library(table1)
 library(ggpubr)
 library(cowplot)
 library(survminer)
-library(ggpattern)
-library(broom)
 library(rstatix)
 ```
 
@@ -986,8 +984,6 @@ table1(
 ### Models with Sex*FDR Interaction
 
 Check p-value for the Wald test of all levels of sex*FDR interaction.
-
-*TODO: if keep this section, need to switch from manual rename of .csv files!*
 
 **IA:**
 
