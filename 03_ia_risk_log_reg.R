@@ -1,4 +1,4 @@
-# SDS 20241023, updated 20260429
+# SDS 20241023
 
 # Hypothesis is that if maternal protection is not explained by survival bias,
 # adding GRS2 to the model will NOT cause maternal protective effect to go away.
@@ -6,9 +6,6 @@
 # Running IA/T1D/T1Dprog models for TEDDY (survival):
 # Base: IA/T1D ~ FDR + PCs + clinical center (TEDDY) + 1|kinship
 # Base + GRS2x as covariate
-
-# TODO: if keep interaction p-value in results, need to update file name to
-# write out differently
 
 # Setup ------------------------------------------------------------------------
 
@@ -20,18 +17,23 @@ library(survival)
 library(splines)
 library(car)
 
-# devtools::install()
-# library(famhistPRS)
 devtools::load_all()
 source(here("config.R"))
 
 # TO NOTE: change this step's specific settings here, all other settings in
 # config.R and study_specs.R
+
+# Settings for all models run
 models <- c("IA") # "IA", "T1D", "T1D_prog"
 terms <- c("GRS2x") # c("Non_HLA", "GRS2x", "dr34")
 engine <- "coxph_tt" # coxme, coxph, or coxph_tt
-wald_test <- "fdr_4level" # optional term to run Wald test one
-# TODO: needs to align with covs
+# TO NOTE: all engines account for relatedness in the model code, either with
+# cluster(FID) (coxph, coxph_tt) or with kinship as a random effect (coxme).
+
+# Settings to run multiple model versions. Each pair of entries (same index in
+# both lists) is one version
+wald_test_terms <- c("fdr_4level", "sex:fdr_4level") # term to run Wald test on
+intxn_versions <- c(NA, "fdr_4level*sex") # interaction term to include
 
 # Required if engine = coxph_tt, can only include either "knots" or "df"
 tt_spec <- list(
@@ -73,64 +75,49 @@ engine_label <- if (engine == "coxph_tt") {
   engine
 }
 
-
 # Run models -------------------------------------------------------------------
 
-results <- map_dfr(models, function(model) {
-  # Load options that are same for all models
-  kinship <- study_specs$kinship_path
-  fdr_var <- config$fdr_var
-  fdr_ref <- config$fdr_ref
-  subset <- config$subset
+# Runs one version for each pair of wald_test_terms and intxn_versions
+walk2(wald_test_terms, intxn_versions, function(wald_test, intxn_term) {
+  intxn_suffix <- ifelse(is.na(intxn_term), "", "_intxn")
 
-  # Get survival variables for current model
-  surv_def <- study_specs$surv_def[[model]]
-  pheno <- pheno_surv_path[[model]]
-  event <- surv_def$event
-  time <- surv_def$time
-  covs <- study_specs$surv_covs[[model]]
+  results <- map_dfr(models, function(model) {
+    # Load options that are same for all models
+    kinship <- study_specs$kinship_path
+    fdr_var <- config$fdr_var
+    fdr_ref <- config$fdr_ref
+    subset <- config$subset
 
-  # If subset == female/male, remove sex from covs
-  if (subset == "female" | subset == "male") {
-    covs <- grep("sex", covs, value = T, invert = T)
-  }
+    # Get survival variables for current model
+    surv_def <- study_specs$surv_def[[model]]
+    pheno <- pheno_surv_path[[model]]
+    event <- surv_def$event
+    time <- surv_def$time
+    covs <- study_specs$surv_covs[[model]]
 
-  result_base <- run_model(
-    engine, model, pheno, event, time, covs, fdr_var, fdr_ref,
-    wald_test = wald_test, kinship = kinship, tt_spec = tt_spec
-  )
-  base_row <- result_base$result_df
-  base_row$term <- NA
+    # If subset == female/male, remove sex from covs
+    if (subset == "female" | subset == "male") {
+      covs <- grep("sex", covs, value = T, invert = T)
+    }
 
-  # Save model object
-  base_mod <- result_base$model_obj
-  covs_mod <- attr(terms(base_mod), "term.labels")
-  out_path_base_mod <- paste0(
-    study_specs$result_out_dir, "/model_objects/",
-    engine_label,
-    "_", model,
-    "_fdr_", tolower(fdr_ref), "_ref_",
-    paste(covs_mod, collapse = "-"),
-    dr_suffix, "_", study_specs$study, "_",
-    subset, ".rds"
-  )
-  saveRDS(base_mod, file = out_path_base_mod)
+    if (!is.na(intxn_term)) {
+      # Replace individual terms with interaction term
+      intxn_terms <- paste(str_split(intxn_term, "\\*")[[1]], collapse = "|")
+      covs <- grep(intxn_terms, covs, value = T, invert = T)
+      covs <- c(covs, intxn_term)
+    }
 
-  term_rows <- map_dfr(terms, function(term) {
-    covs_term <- c(covs, term)
-
-    result_term_tmp <- run_model(
-      engine, model, pheno, event, time, covs_term, fdr_var, fdr_ref,
+    result_base <- run_model(
+      engine, model, pheno, event, time, covs, fdr_var, fdr_ref,
       wald_test = wald_test, kinship = kinship, tt_spec = tt_spec
     )
+    base_row <- result_base$result_df
+    base_row$term <- NA
 
-    result_term <- result_term_tmp$result_df
-    result_term$term <- term
-
-    # Save term model
-    term_mod <- result_term_tmp$model_obj
-    covs_mod <- attr(terms(term_mod), "term.labels")
-    out_path_term_mod <- paste0(
+    # Save model object
+    base_mod <- result_base$model_obj
+    covs_mod <- attr(terms(base_mod), "term.labels")
+    out_path_base_mod <- paste0(
       study_specs$result_out_dir, "/model_objects/",
       engine_label,
       "_", model,
@@ -139,26 +126,52 @@ results <- map_dfr(models, function(model) {
       dr_suffix, "_", study_specs$study, "_",
       subset, ".rds"
     )
-    saveRDS(term_mod, file = out_path_term_mod)
+    saveRDS(base_mod, file = out_path_base_mod)
 
-    result_term
+    term_rows <- map_dfr(terms, function(term) {
+      covs_term <- c(covs, term)
+
+      result_term_tmp <- run_model(
+        engine, model, pheno, event, time, covs_term, fdr_var, fdr_ref,
+        wald_test = wald_test, kinship = kinship, tt_spec = tt_spec
+      )
+
+      result_term <- result_term_tmp$result_df
+      result_term$term <- term
+
+      # Save term model
+      term_mod <- result_term_tmp$model_obj
+      covs_mod <- attr(terms(term_mod), "term.labels")
+      out_path_term_mod <- paste0(
+        study_specs$result_out_dir, "/model_objects/",
+        engine_label,
+        "_", model,
+        "_fdr_", tolower(fdr_ref), "_ref_",
+        paste(covs_mod, collapse = "-"),
+        dr_suffix, "_", study_specs$study, "_",
+        subset, ".rds"
+      )
+      saveRDS(term_mod, file = out_path_term_mod)
+
+      result_term
+    })
+
+    bind_rows(base_row, term_rows)
   })
 
-  bind_rows(base_row, term_rows)
+  # Reformat results
+  results <- results %>%
+    dplyr::relocate(term, .after = outcome)
+
+  # Save results
+  out_path <- paste0(
+    study_specs$result_out_dir, "/",
+    engine_label,
+    "_", paste(models, collapse = "_"),
+    "_fdr_", tolower(config$fdr_ref), "_ref_",
+    paste0(terms, collapse = "_"),
+    dr_suffix, "_", study_specs$study, "_",
+    config$subset, intxn_suffix, ".csv"
+  )
+  write_csv(results, file = out_path)
 })
-
-# Reformat results
-results <- results %>%
-  dplyr::relocate(term, .after = outcome)
-
-# Save results
-out_path <- paste0(
-  study_specs$result_out_dir, "/",
-  engine_label,
-  "_", paste(models, collapse = "_"),
-  "_fdr_", tolower(config$fdr_ref), "_ref_",
-  paste0(terms, collapse = "_"),
-  dr_suffix, "_", study_specs$study, "_",
-  config$subset, ".csv"
-)
-write_csv(results, file = out_path)
