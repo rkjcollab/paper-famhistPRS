@@ -14,9 +14,6 @@
 # n_knots <- tt_spec$knots
 # df <- tt_spec$df
 
-# TODO: should libraries used below be library() here? Or just in scripts
-# that call?
-
 # Automatically includes cluster(FID)
 mod_coxph <- function(
   pheno, outcome, time, covs, fdr_var, fdr_ref, wald_test = NULL
