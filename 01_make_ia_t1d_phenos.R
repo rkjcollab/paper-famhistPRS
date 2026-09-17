@@ -25,13 +25,17 @@
 # Setup ------------------------------------------------------------------------
 
 library(here)
+library(dplyr)
+library(readr)
+library(tibble)
 devtools::load_all()
 source(here("config.R"))
 
-# Define function --------------------------------------------------------------
+# TO NOTE: Code automatically makes files with all individuals, with controls
+# only, with males only, and with females only. Also applies the dr_filt
+# setting from config.R.
 
-# Code automatically makes files with all individuals and with controls only,
-# and applies critera as set in config.R.
+# Define function --------------------------------------------------------------
 
 make_pheno <- function(config) {
   # Do TEDDY-specific prep
