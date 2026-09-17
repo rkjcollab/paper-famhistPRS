@@ -1,13 +1,7 @@
-# SDS 20240709, updated 20260428
+# SDS 20240709
 
 # Script to run linear model for analysis of genetic risk in T1D moms:
 # GRS2 ~ fdr + covs
-
-# Updated 20241024 to add extraction of confidence intervals to model 1 only to
-# allow for making a forest plot for IDS poster.
-# Updated 20251014 to only run one linear model, but script history contains
-# more complex models with HLAGRP and interaction of HLAGRP and FDR.
-# Updated 20260212 & 20260407.
 
 # Setup ------------------------------------------------------------------------
 
@@ -36,7 +30,6 @@ run_model <- function(config) {
   )
 
   # Get input paths
-  # TODO: bring back option to run in cases & controls in same script?
   kinship <- study_specs$kinship_path
   # Okay to use IA or T1D pheno since both have all participants
   pheno <- paste0(
