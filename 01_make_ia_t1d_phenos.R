@@ -1,4 +1,4 @@
-# SDS 20240627, updated 20260428
+# SDS 20240627
 
 # Make TEDDY phenotype file for analysis of genetic risk in T1D moms. Start from
 # Immunogenetics TEDDY R01 pheno with shared outcome definitions and exclusions:
@@ -10,44 +10,37 @@
 # From one of six primary clinical centers
 
 # Additional analytical criteria
-# Have exome chip data - based on anc_d & anc_t inputs
+# Have exome chip data
 # Have primarily European ancestry
 # Have only one or no first-degree relatives with T1D
 # One genetically-identical twin removed at random
 # OPTIONAL: have only HLA DR3/4, DR4/4, DR3/3 or DR4/X
 
 # Additional notes
-# Run analysis two ways: in everyone and in controls (no IA or T1D) only
-# Include 3- and 4-level FDR (dad/sib combined & separated)
-# Write out separate analytical pheno file for each outcome & subset
-# OPTIONAL: sex-stratified analyses
+# Subset to everyone or to controls (no IA or T1D) only
+# Use 3- and 4-level FDR (dad/sib combined & separated)
+# Can run sex-stratified analyses
+# Writes out separate analytical pheno file for each outcome & subset
 
 # Setup ------------------------------------------------------------------------
 
-# TODO: need to update for split to two functions in utils_teddy.R
-
 library(here)
-
+devtools::load_all()
 source(here("config.R"))
-source(here("R/study_specs.R"))
-source(here("R/utils_pheno.R"))
-source(here("R/utils_teddy.R"))
-
-# TO NOTE: change other settings in config.R
 
 # Define function --------------------------------------------------------------
 
 # Code automatically makes files with all individuals and with controls only,
-# and applies all criteria above except for optional HLA-DR filter.
-# dr_filt is defined in config.R. Set to "yes" or "no" to filter
-# DR3/4, DR4/4, DR3/3 or DR4/X.
+# and applies critera as set in config.R.
 
 make_pheno <- function(config) {
   # Do TEDDY-specific prep
-  df <- prep_teddy(study_specs)
+  df_tmp <- prep_teddy_base(study_specs)
+  df <- prep_teddy_final(study_specs, df_tmp)
+
   message("After prep: ", nrow(df))
 
-  # Do shared prep
+  # Do general prep
   df <- set_factor_levels(df)
 
   if (config$dr_filt == "yes") {
