@@ -6,7 +6,7 @@
 # Setup ------------------------------------------------------------------------
 
 library(here)
-library(dplyr)
+library(tidyverse)
 library(coxme)
 devtools::load_all()
 source(here("config.R"))
@@ -16,6 +16,7 @@ source(here("config.R"))
 outcome <- "GRS2x" # "GRS2x" or "Non_HLA"
 covs <- c("fdr_4level", "PC1", "PC2", "sex", "cc")
 subset <- "all" # all, ctrls, female, or male
+wald_test <- "fdr_4level" # "fdr_4level" or NULL
 
 # Define function --------------------------------------------------------------
 
@@ -41,7 +42,10 @@ run_model <- function(config) {
 
   # Run model
   message(paste0("Running model for ", subset, " & outcome = ", outcome, "."))
-  result <- mod(pheno, kinship, outcome, covs, config$fdr_var, config$fdr_ref)
+  result <- mod(
+    pheno, kinship, outcome, covs, config$fdr_var, config$fdr_ref,
+    wald_test = wald_test
+  )
 
   # Save results
   write_csv(result, file = out_path)
