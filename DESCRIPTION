@@ -15,7 +15,6 @@ Imports:
     cowplot,
     dplyr,
     ggpubr,
-    GMMAT,
     here,
     khroma,
     readr,
