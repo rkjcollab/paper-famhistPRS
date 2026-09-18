@@ -1,5 +1,5 @@
-# TODO: revisit the function split here, currently motivated by need to access
-# pheno before subset to EUR
+# Helper functions for generating pheno files for TEDDY. Function split is
+# motivated by need to access pheno before subset to EUR.
 
 prep_teddy_base <- function(specs) {
   # Load

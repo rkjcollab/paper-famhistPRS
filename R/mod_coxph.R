@@ -1,20 +1,6 @@
-# Test
-# model <- models[1]
-# pheno <- pheno_surv_path[[model]]
-# surv_def <- study_specs$surv_def[[model]]
-# outcome <- surv_def$event
-# time  <- surv_def$time
-# covs <- study_specs$surv_covs[[model]]
-# fdr_var <- config$fdr_var
-# fdr_ref <- config$fdr_ref
-# wald_test <- "fdr_4level"
-#
-# tt_spec <- tt_spec
-# type <- tt_spec$type
-# n_knots <- tt_spec$knots
-# df <- tt_spec$df
+# Function to run coxph model, automatically includes cluster(FID) as a
+# covariate. Optionally include name of term to run Wald test on.
 
-# Automatically includes cluster(FID)
 mod_coxph <- function(
   pheno, outcome, time, covs, fdr_var, fdr_ref, wald_test = NULL
 ) {

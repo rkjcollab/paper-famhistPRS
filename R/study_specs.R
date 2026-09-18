@@ -1,4 +1,4 @@
-# Script defines paths and settings for the TEDDY study analysis
+# Script defines paths and settings for the TEDDY study analysis.
 
 base_dir <- Sys.getenv("RKJCOLLAB")
 

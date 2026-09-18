@@ -1,3 +1,5 @@
+# Helper functions for generating pheno files that are not study-specific.
+
 set_factor_levels <- function(data) {
   # Keep outcomes as 0/1 for coxme/surv
   data <- data %>%

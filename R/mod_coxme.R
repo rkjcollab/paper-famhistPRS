@@ -1,3 +1,6 @@
+# Function to run coxme model with kinship matrix, optionally include name of
+# term to run Wald test on.
+
 mod_coxme <- function(
   pheno, kinship, outcome, time, covs, fdr_var, fdr_ref,
   wald_test = NULL

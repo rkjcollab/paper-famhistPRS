@@ -1,7 +1,7 @@
-# fdr_var <- config$fdr_var
-# fdr_ref <- config$fdr_ref
+# Function to run lmekin model with kinship matrix, optionally include name of
+# term to run Wald test on (can't be an interaction). Note that pheno files
+# must have id = "ID".
 
-# Note: pheno files must be set to have id = "ID"
 mod <- function(
   pheno, kinship, outcome, covs, fdr_var, fdr_ref, wald_test = NULL
 ) {
@@ -29,7 +29,7 @@ mod <- function(
     v <- vcov(mod)
 
     if (grepl(":", wald_test)) {
-      stop("Cannot compute a Wald test on an interaction term.")
+      stop("This model cannot compute a Wald test on an interaction term.")
     } else {
       # Term
       term_pattern <- paste0("^", wald_test)
