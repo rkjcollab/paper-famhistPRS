@@ -1,15 +1,8 @@
-# SDS 20260511
+# Helper functions for working with coxph models including a time transform.
 # Originally based on code from Kirk Hohsfield.
 
 # Use for 'log' or 'identity' (linear) time-transform, must match the transform
 # used when model was run
-# mod = m_ia_lin_g
-# var = "fdr_4level"
-# levels = c("None", "Mom", "Sib")
-# ref_label = "Dad"
-# time_transform = identity
-# lvl <- "Mom"
-# times = seq(0, 16, 1)
 get_tt_hr <- function(
   mod,
   var,
@@ -50,13 +43,6 @@ get_tt_hr <- function(
 
 # This function is for spline models, same knots/boundaries should be used as
 # when model was run
-# mod = m_ia_spline_3
-# var = mod$tt_meta$var
-# levels = c("None", "Mom", "Sib")
-# ref_label = "Dad"
-# times = seq(0, 16, 0.5)
-# knots = mod$tt_meta$knots
-# boundary = mod$tt_meta$boundary
 get_tt_hr_spline <- function(
   mod,
   var,
@@ -145,7 +131,6 @@ calc_hr_ci <- function(
   )
 }
 
-# TODO: need to dedup with manuscript version
 plot_tt_hr <- function(
   data,
   var,
@@ -155,14 +140,14 @@ plot_tt_hr <- function(
   p <- ggplot(data, aes(x = time, y = hr, color = cohort, fill = cohort)) +
     geom_line(linewidth = 1) +
     geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = NA) +
-    geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+    geom_line(aes(y = lower), linewidth = 0.3) +
+    geom_line(aes(y = upper), linewidth = 0.3) +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
     scale_y_log10() +
     scale_x_continuous(breaks = times) +
     labs(
       x = "Follow-up Time",
       y = "Hazard Ratio",
-      title = paste("Time-Varying HR for", var),
-      subtitle = paste("Reference:", ref_label),
       color = "Comparison",
       fill = "Comparison"
     ) +

@@ -1,3 +1,5 @@
+# Helper functions for plotting.
+
 # data <- m1_dad
 # ref <- "dad"
 make_h1_forest_plot <- function(data, ref, fdr_order) {
@@ -281,7 +283,9 @@ make_h2_forest_plot_manuscript <- function(data, ref, term, fdr_order, outcome_o
   return(plot)
 }
 
-# TODO: this is related to version in utils_coxph_tt, need to de-duplicate!
+# Thin manuscript-styled shell over plot_tt_hr() (R/utils_coxph_tt.R): adds
+# explicit FDR colors and optional annotations on top of the base plot rather
+# than duplicating its construction.
 plot_tt_hr_manuscript <- function(
   data,
   var,
@@ -298,14 +302,7 @@ plot_tt_hr_manuscript <- function(
   )
   data$cohort <- factor(data$cohort, levels = fdr_order)
 
-  p <- ggplot(data, aes(x = time, y = hr, color = cohort, fill = cohort)) +
-    geom_line(linewidth = 1) +
-    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = NA) +
-    geom_line(aes(y = lower), linewidth = 0.3) +
-    geom_line(aes(y = upper), linewidth = 0.3) +
-    geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
-    scale_y_log10() +
-    scale_x_continuous(breaks = times) +
+  p <- plot_tt_hr(data, var, ref_label, times) +
     scale_color_manual(values = c(
       "Father" = color_fdr_dad,
       "Mother" = color_fdr_mom,
@@ -318,19 +315,11 @@ plot_tt_hr_manuscript <- function(
       "Sibling" = color_fdr_sib,
       "None" = color_fdr_none
     )) +
-    labs(
-      x = "Follow-up Time",
-      y = "Hazard Ratio",
-      color = "",
-      fill = ""
-    ) +
-    theme_bw() +
+    labs(color = "", fill = "") +
     theme(
       legend.position = "right",
-      legend.direction = "vertical",
-      panel.grid.minor = element_blank()
+      legend.direction = "vertical"
     )
-
 
   if (!is.null(data_n)) {
     times_n <- c(0, 3, 6, 9, 12, 15)
