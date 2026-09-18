@@ -32,6 +32,7 @@ knitr::opts_knit$set(
 
 library(tidyverse)
 library(conflicted)
+library(survival)
 library(table1)
 library(ggpubr)
 library(cowplot)
@@ -76,7 +77,7 @@ m1_dad <- read_csv(
   "lm_GRS2x_fdr_dad_ref_teddy_all.csv"
 )
 m_ia_lin_g <- readRDS(
-  "model_objects/coxph_tt_linear_fdr_4level_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+  "model_objects/coxph_tt_linear_IA_fdr_dad_ref_fdr_4level-sex-PC1-PC2-cc-GRS2x-tt(fdr_4level)_teddy_all.rds"
 )
 
 # From step 03 - read in hypoth 2 results
@@ -87,19 +88,22 @@ m2_dad_ia <- read_csv(
 m2_dad_t1d_prog <- read_csv(
   "coxph_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_all.csv"
 )
+
 # Supplementary results - coxph sex-stratified
 m2_female_ia <- read_csv("coxph_tt_linear_IA_fdr_dad_ref_GRS2x_teddy_female.csv")
 m2_female_t1d_prog <- read_csv("coxph_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_female.csv")
 m2_male_ia <- read_csv("coxph_tt_linear_IA_fdr_dad_ref_GRS2x_teddy_male.csv")
 m2_male_t1d_prog <- read_csv("coxph_T1D_T1D_prog_fdr_dad_ref_GRS2x_teddy_male.csv")
+
 # CoxPH violation results - coxph no time-varying
 # No time-varying
 m2_ia_ph <- readRDS(
-  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)_teddy_all.rds"
+  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-sex-PC1-PC2-cc_teddy_all.rds"
 )
 m2_ia_g_ph <- readRDS(
-  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-PC1-PC2-sex-cc-cluster(FID)-GRS2x_teddy_all.rds"
+  "model_objects/coxph_IA_fdr_dad_ref_fdr_4level-sex-PC1-PC2-cc-GRS2x_teddy_all.rds"
 )
+
 # Coxph results with interaction FDR*sex
 m2_ia_intxn <- read_csv(
   "coxph_tt_linear_IA_fdr_dad_ref_GRS2x_teddy_all_intxn.csv"
@@ -355,13 +359,16 @@ ggsave(
 
 ### **Distribution for Graphical Abstract**
 
+**TO NOTE: this section will be slightly but not meaningfully different each**
+**run due to randomness without seed.**
+
 Use random normal distributions to show:
 
 1. False father distribution
 2. False hypothesized left-shifted mother distribution, if remove highest GRS2x scores
 2. False mother distribution, identical to father but with line at high GRS2x
 
-```{r fig.width=3, fig.height=2.2}
+```{r fig.width=3, fig.height=2.2, eval = FALSE}
 data_rand_1 <- data.frame(norm = rnorm(n = 100000, mean = 0, sd = 1))
 
 data_rand <- bind_rows(
@@ -1003,6 +1010,7 @@ m2_t1d_prog_intxn %>%
   )) %>%
   dplyr::select(outcome, term, grep("global", colnames(.)))
 ```
+
 # **Tables**
 ## **Table 1**
 
@@ -1306,6 +1314,26 @@ reporting the IA model Cox proportional hazards violation here.
 
 ```{r}
 show_cox_zph(m2_ia_ph)
+```
+
+## **Find Last Age with MatProt**
+
+Print the last age-specific HR that shows significant maternal protection from
+the final coxph() model with linear time-transform of fdr_4level and with GRS2x
+adjustment.
+
+```{r}
+ m_ia_lin_g_tt_hr <- get_tt_hr(
+  mod = m_ia_lin_g,
+  var = "fdr_4level",
+  levels = c("None", "Mom", "Sib"),
+  ref_label = "Dad",
+  times = seq(0, 16, 0.5),
+  time_transform = identity
+)
+
+m_ia_lin_g_tt_hr %>% dplyr::filter(cohort == "Mom vs Dad")
+
 ```
 
 
