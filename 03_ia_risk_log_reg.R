@@ -80,6 +80,24 @@ tt_spec <- list(
 # Derived label
 dr_suffix <- ifelse(config$dr_filt == "yes", "_dr_filt", "")
 
+# Dispatches to the model-fitting function for the given engine
+run_surv_model <- function(
+  engine, model, pheno, event, time, covs, fdr_var, fdr_ref,
+  wald_test = NULL, kinship = NULL, tt_spec = NULL
+) {
+  message(paste0("Running ", engine, " model for ", model, "."))
+
+  if (engine == "coxph") {
+    mod_coxph(pheno, event, time, covs, fdr_var, fdr_ref, wald_test)
+  } else if (engine == "coxph_tt") {
+    mod_coxph_tt(pheno, event, time, covs, fdr_var, fdr_ref, tt_spec, wald_test)
+  } else if (engine == "coxme") {
+    mod_coxme(pheno, kinship, event, time, covs, fdr_var, fdr_ref, wald_test)
+  } else {
+    stop("Unknown engine")
+  }
+}
+
 # Runs all options from one list entry in run_specs: every model X subset
 # combination with each intxn_wald_pairs pair
 run_one_spec <- function(engine, models, subsets, intxn_wald_pairs) {
@@ -162,7 +180,7 @@ run_one_spec <- function(engine, models, subsets, intxn_wald_pairs) {
           covs <- c(covs, intxn_term)
         }
 
-        result_base <- run_model(
+        result_base <- run_surv_model(
           engine, model, pheno, event, time, covs, fdr_var, fdr_ref,
           wald_test = wald_test, kinship = kinship, tt_spec = tt_spec
         )
@@ -190,7 +208,7 @@ run_one_spec <- function(engine, models, subsets, intxn_wald_pairs) {
           term <- terms[t]
           covs_term <- c(covs, term)
 
-          result_term_tmp <- run_model(
+          result_term_tmp <- run_surv_model(
             engine, model, pheno, event, time, covs_term, fdr_var, fdr_ref,
             wald_test = wald_test, kinship = kinship, tt_spec = tt_spec
           )
