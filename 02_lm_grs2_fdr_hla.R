@@ -20,7 +20,7 @@ wald_test <- "fdr_4level" # "fdr_4level" or NULL
 
 # Define function --------------------------------------------------------------
 
-run_model <- function(config) {
+run_lm_model <- function(config) {
   # Define output path
   dr_suffix <- ifelse(config$dr_filt == "yes", "_dr_filt", "")
   out_path <- file.path(
@@ -53,4 +53,4 @@ run_model <- function(config) {
 
 # Run function -----------------------------------------------------------------
 
-run_model(config)
+run_lm_model(config)
