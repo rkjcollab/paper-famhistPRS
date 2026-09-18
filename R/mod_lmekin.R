@@ -90,6 +90,12 @@ mod <- function(
   results_ci_high <- as.data.frame(t(ci_high))
   colnames(results_ci_high) <- paste0("conf.high_", names(mod$coefficients$fixed))
 
+  # Combine, standardize names
+  results_all_tmp <- cbind(
+    results_est, results_se, results_z, results_p,
+    results_ci_low, results_ci_high
+  )
+
   # Extract Wald test on given variable
   if (!is.null(wald_test)) {
     results_w <- data.frame(
@@ -102,15 +108,8 @@ mod <- function(
       paste0(wald_test, "_global_chisq"),
       paste0(wald_test, "_global_df")
     )
-  } else {
-    results_w <- data.frame()
+    results_all_tmp <- cbind(results_all_tmp, results_w)
   }
-
-  # Combine, standardize names
-  results_all_tmp <- cbind(
-    results_est, results_se, results_z, results_p,
-    results_ci_low, results_ci_high, results_w
-  )
 
   colnames(results_all_tmp) <- colnames(results_all_tmp) %>%
     gsub(fdr_var, "fdr_", .) %>%
