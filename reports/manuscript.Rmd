@@ -56,7 +56,7 @@ Maternal_Protection/data/results/famhist_prs.
 
 
 ```{r, message = F}
-# TODO: move these to config?
+# Manuscript-specific settings
 fdr_order <- c("Father", "Mother", "Sibling", "None")
 outcome_order <- c("T1D", "IA", "Progression")
 
