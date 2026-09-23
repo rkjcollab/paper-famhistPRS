@@ -1,66 +1,80 @@
 # MatProt PRS Family History Analysis
 
-This repository was dervied from the internal project: https://github.com/rkjcollab/explore_matprot,
-specifically from the genetics/famhistPRS/ subdirectory at tag paper-release-famhistPRS and commit 8765959.
-The code was extracted using git subtree split to preserve history.
+This repository was dervied from the internal project:
+https://github.com/rkjcollab/explore_matprot, specifically from the
+genetics/famhistPRS/ subdirectory at tag paper-release-famhistPRS and commit
+8765959. The code was extracted using git subtree split to preserve history.
 
-This repository contains the analysis code for a manuscript evaluating whether type 1 diabetes polygenic risk scores explain first-degree relative patterns in TEDDY and related analyses.
+This repository contains the analysis code for a manuscript evaluating whether
+ type 1 diabetes polygenic risk scores explain first-degree relative patterns
+ in TEDDY and related analyses.
 
-The repository is organized as a reproducible research compendium: the code is version controlled here, while private/raw study data are expected to live outside the repository under the collaboration data root defined by `RKJCOLLAB`.
+The repository is organized as a reproducible research compendium: the code is
+here but the TEDDY data used cannot be made public and is stored outside the
+repo at the RKJcollab data root `RKJCOLLAB`.
 
-## Data Access
+## Data
 
-Raw and derived study data are not included in this repository. Before running the analysis, set `RKJCOLLAB` to the private collaboration data root that contains directories such as `Immunogenetics_T1D`, `Maternal_Protection`, and `DAISY`.
+The repository is organized as a reproducible research compendium: the code is
+here but the TEDDY data used cannot be made public and is stored outside the
+repo at the RKJcollab data root `RKJCOLLAB`.
 
-For example:
+Before running the analysis, set `RKJCOLLAB` to the RKJcollab OneDrive data
+root that contains top-level folders `Immunogenetics_T1D` and
+`Maternal_Protection`.
+
+## Setup
+
+Restore the R environment:
 
 ```sh
-export RKJCOLLAB=/path/to/collaboration/root
+Rscript -e 'renv::restore()'
 ```
 
-The scripts use [config.R](config.R) to resolve repo-local helper files and private data paths.
+PLINK1.9 and PLINK2 are also required but not managed by `renv`.
 
-## Main Workflow
+## Pipeline
 
-The publication workflow is encoded in [Makefile](Makefile). From the repository root, run:
+Run the scripts in order from the repository root:
 
 ```sh
-make help
-make check-env
-make all
+Rscript 01_make_ia_t1d_phenos.R
+Rscript 02_lm_grs2_fdr_hla.R
+Rscript 03_ia_risk_log_reg.R
+Rscript 04_extract_grs2x_variants.R
+Rscript 05_split_grs2x_variants_by_fdr.R
+Rscript -e 'source("config.R"); rmarkdown::render("reports/manuscript.Rmd")'
+
 ```
 
-The main targets are:
+- `01_make_ia_t1d_phenos.R`: builds TEDDY analytical phenotype files.
+- `02_lm_grs2_fdr_hla.R`: runs the linear mixed model for GRS2x by FDR.
+- `03_ia_risk_log_reg.R`: runs the survival models for IA, T1D, and
+    progression from IA to T1D.
+- `04_extract_grs2x_variants.R`: subsets TEDDY genotype data to GRS2x SNPs.
+- `05_test_grs2x_variants_by_fdr.R`: tests for differences in GRS2x variant
+    allele frequency by FDR.
+- `reports/manuscript.Rmd`: renders the manuscript report.
 
-- `make phenotypes`: builds TEDDY analytical phenotype files with the manuscript exclusions and derived variables.
-- `make data-summary`: renders the analytical data summary report.
-- `make lm-grs`: runs the linear mixed model for `GRS2x ~ FDR + covariates`.
-- `make outcome-models`: runs the survival outcome models for IA, T1D, and progression.
-- `make manuscript`: renders the manuscript report.
-- `make time-varying`: renders the time-varying analysis report.
-
-## Key Files
-
-- [1_make_ia_t1d_phenos.R](1_make_ia_t1d_phenos.R): creates analytical phenotype files.
-- [2_analytical_data_summary.Rmd](2_analytical_data_summary.Rmd): summarizes analytical datasets.
-- [3_lm_grs2_fdr_hla.R](3_lm_grs2_fdr_hla.R): models PRS differences by family history.
-- [4_ia_risk_log_reg.R](4_ia_risk_log_reg.R): models IA, T1D, and progression outcomes.
-- [Manuscript_FamhistPRS.Rmd](Manuscript_FamhistPRS.Rmd): final manuscript report source.
-- [R/study_specs.R](R/study_specs.R): study-specific input paths, phenotype paths, covariates, and survival definitions.
-- [mod_lmekin.R](mod_lmekin.R), [mod_coxme.R](mod_coxme.R), and [mod_coxph.R](mod_coxph.R): model helper functions.
-- [set_paper_colors.R](set_paper_colors.R): manuscript plotting colors.
-- [0_prs_famhist_analytical_plan.R](0_prs_famhist_analytical_plan.R): exploratory analytical planning notes.
-- [archive](archive): historical/provenance code retained for reference.
-- [PRSedm](PRSedm): polygenic risk score tooling and resources used by the project.
 
 ## Outputs
 
-Derived analysis files and rendered reports are written under `RKJCOLLAB`, primarily:
+Derived analysis files, reports, and results are written under `RKJCOLLAB`, in
+the paths defined by `study_specs` in [R/study_specs.R](R/study_specs.R).
 
-- `Maternal_Protection/data/teddy/famhist_prs`
-- `Maternal_Protection/data/results/famhist_prs`
-- `Maternal_Protection/reports/risk_scores`
+## Other Files
 
-## Notes For Reuse
+The input genetic data was imputed using the repo
+[`rkjcollab/imputation`](https://github.com/rkjcollab/imputation) and the
+config file [`imputation_config.yml`](imputation_config.yml) copied here but
+run in the separate `rkjcollab/immuno_t1d` repo since used by multiple
+projects.
 
-This repository is intended to document and reproduce the analyses supporting the manuscript. It is not yet packaged as a general-purpose R package. The immediate reproducibility contract is the Makefile workflow plus the shared path configuration in [config.R](config.R).
+The GRS2x was calculated using the script
+[`reports/teddy_immunoT1D_tmr3_grs2x.Rmd`](reports/teddy_immunoT1D_tmr3_grs2x.Rmd),
+again copied here but run in the separate `rkjcollab/immuno_t1d` repo.
+
+[`reports/time_varying_analysis.Rmd`](reports/time_varying_analysis.Rmd) is an
+archived exploratory report that a preliminary step before the final manuscript
+time-varying analysis. It is frozen at the point it was last rendered for
+decision masking and is not maintained with the pipeline.
