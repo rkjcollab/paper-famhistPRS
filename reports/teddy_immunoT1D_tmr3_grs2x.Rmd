@@ -1,0 +1,351 @@
+---
+title: "Teddy Immuno T1D GRS2x"
+author: "NV, Updated by SDS"
+date: "Last compiled on `r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: kable
+    code_folding: hide
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding,
+  output_dir = paste0(Sys.getenv("RKJCOLLAB"), "/Immunogenetics_T1D/genetics/reports")) })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(
+  root.dir = paste0(Sys.getenv("RKJCOLLAB"))) #setting up pathway
+
+# Load libraries
+library(tidyverse)
+library(haven)
+library(conflicted)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(openxlsx)
+library(data.table)
+library(GGally)
+library(ggcorrplot)
+library(ggpubr)
+
+```
+
+
+# **Overview**
+
++ Genetics: Immunogenetics_T1D/genetics/teddy_r01/tm_r3_imp/imputed_clean_maf0_rsq0.3
+  + *Updated 20251118 to use "full_qc" TOPMed R3 input:*
+    + *Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc/imputed_clean_maf0_rsq0.3/chr_all_concat*
++ Code: immuno_t1d/risk_scores/teddy_r01
++ Results: Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x
+    + *Updated 20251118 to save previous results at grs2x/tm_r3_imp/hwe_in_all and*
+      *updated results at grs2x/tm_r3_imp/full_qc.*
++ Pheno: Immunogenetics_T1D/raw/teddy_r01/2025-03-05/rj_immuno_all_demo_masked.sas7bdat
+
+# **Load Data**
+
+*TO NOTE: this section loads data that is generated in bash chunks below.*
+
+```{r}
+log_file <- read_delim(
+  "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results.log",
+  delim = " - ", col_names = F)
+
+log_file_imp <- read_delim(
+  "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results_with_imp.log",
+  delim = " - ", col_names = F)
+
+SNPs_input_impute <- fread(
+  "Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc/imputed_clean_maf0_rsq0.3/chr_all_concat.pvar",
+  skip = "#CHROM"  # skip comment line to get clean column names
+)
+
+# Additional for specific checks
+chr6_info_full_qc <- read_tsv(gzfile(
+  "Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc/imputed/chr6.info.gz"),
+  comment = "##")
+
+```
+
+
+# **GRS2x Calculation**
+
+Using mamba installation of PRSedm:
+
+mamba install sethsh7::prsedm conda-forge::python bioconda::pysam
+
+### **No GRS2x Imputation**
+
+```{zsh engine.opts= '-i', eval=F}
+mamba activate prsedm
+
+in="Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc/imputed_clean_maf0_rsq0.3/chr_all_concat.vcf.gz"
+
+out="Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results"
+
+# Run PRSedm
+prsedm --vcf "$in" \
+       --col GT \
+       --build hg38 \
+       --scores t1dgrs2-luckett25 \
+       --output "${out}.csv" > "${out}.log" 2>&1
+
+```
+
+Check Log File:
+
+```{r}
+# Add "cluster" information to log file before removing text
+snps_log <- log_file %>%
+  dplyr::mutate(group = ifelse(str_detect(X4, "Generating"), gsub(".+ for", "", X4), NA)) %>%
+  fill(group, .direction = "down") %>%
+  dplyr::mutate(grs2x_imp = case_when(
+    str_detect(X4, "Imputing") ~ "imputed",
+    str_detect(X4, "not found and impute=off") ~ "not_found",
+    TRUE ~ "used"))  %>%
+  dplyr::mutate(chr_pos = X4) %>%
+  dplyr::filter(str_detect(chr_pos, "[[:digit:]]+:[[:digit:]]+")) %>%
+  dplyr::mutate(chr_pos = gsub(".+ ", "", gsub("\\.", "", gsub("\\.\\.\\.", "", chr_pos)))) %>%
+  group_by(chr_pos) %>%
+  slice(
+    if (n() > 1) {
+      which(grs2x_imp %in% c("imputed", "not_found"))
+    } else {
+      1
+    }
+  ) %>%
+  ungroup() %>%
+  dplyr::select(group, chr_pos, grs2x_imp) %>%
+  dplyr::mutate(group = gsub("^ ", "", gsub("\\.\\.\\.", "", group)))
+
+snps_log
+
+write_tsv(
+  snps_log,
+  "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results_log_summary.txt")
+
+```
+
+
+3 missing variants were not imputed - why is this more than previous TM R3 IMP?
+All are chr6 variants, so look at info files from hwe_in_all imputation and
+full_qc imputation:
+
++ 6:32644083
++ 6:32615766
++ 6:32630313
+
+```{r}
+pos_list <- c(32644083, 32615766, 32630313)
+
+chr6_info_full_qc_filt <- chr6_info_full_qc %>%
+  dplyr::filter(POS %in% pos_list) %>%
+  dplyr::select(POS, ID, INFO)
+
+chr6_info_hwe_all_filt <- chr6_info_hwe_all %>%
+  dplyr::filter(POS %in% pos_list) %>%
+  dplyr::select(POS, ID, INFO)
+
+chr6_info <- full_join(
+  chr6_info_full_qc_filt,
+  chr6_info_hwe_all_filt,
+  by = c("POS", "ID"),
+  suffix = c("_full_qc", "_hwe_all"))
+
+chr6_info
+```
+
+Likely makes sense for variants 32615766 (already low R2 in hwe_all) and
+32644083 (the previously missing variant, no INFO available due to
+server-applied R2 threshold). Not sure why 32630313 would have such a big swing,
+but hopefully is not influential since AF is so low. Is there a way to check
+this on PRSedm?
+
+### **With GRS2x Imputation**
+
+Only supplying reference for the chromosome where variant was not found. Need
+to remove "chr" prefix from TOPMed freeze 8 files for PRSedm.
+
+```{zsh engine.opts= '-i', eval=F}
+mamba activate bcftools
+
+bcftools annotate --rename-chrs rename_add_chr_prefix.txt -O z -o \
+  chr6.TOPMed_freeze_8.all.rename_chr.vcf.gz chr6.TOPMed_freeze_8.all.vcf.gz
+tabix chr6.TOPMed_freeze_8.all.rename_chr.vcf.gz
+```
+
+
+```{zsh engine.opts= '-i', eval=F}
+mamba activate prsedm
+
+in="Immunogenetics_T1D/genetics/teddy_r01/imputation/tm_r3_imp/exome_chip/full_qc/imputed_clean_maf0_rsq0.3/chr_all_concat.vcf.gz"
+out="Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results_with_imp"
+refvcf="Maternal_Protection/raw/genome_maps/TOPMed_freeze8/chr6.TOPMed_freeze_8.all.rename_chr.vcf.gz"
+
+# Run PRSedm
+prsedm --vcf "$in" \
+       --col GT \
+       --build hg38 \
+       --scores t1dgrs2-luckett25 \
+       --impute \
+       --refvcf "$refvcf" \
+       --output "${out}.csv" > "${out}.log" 2>&1
+
+```
+
+Check Log File:
+
+```{r}
+# Add "cluster" information to log file before removing text
+snps_log_imp <- log_file_imp %>%
+  dplyr::mutate(group = ifelse(str_detect(X4, "Generating"), gsub(".+ for", "", X4), NA)) %>%
+  fill(group, .direction = "down") %>%
+  dplyr::mutate(grs2x_imp = case_when(
+    str_detect(X4, "Imputing") ~ "imputed",
+    str_detect(X4, "not found and impute=off") ~ "not_found",
+    TRUE ~ "used"))  %>%
+  dplyr::mutate(chr_pos = X4) %>%
+  dplyr::filter(str_detect(chr_pos, "[[:digit:]]+:[[:digit:]]+")) %>%
+  dplyr::mutate(chr_pos = gsub(".+ ", "", gsub("\\.", "", gsub("\\.\\.\\.", "", chr_pos)))) %>%
+  group_by(chr_pos) %>%
+  slice(
+    if (n() > 1) {
+      which(grs2x_imp %in% c("imputed", "not_found"))
+    } else {
+      1
+    }
+  ) %>%
+  ungroup() %>%
+  dplyr::select(group, chr_pos, grs2x_imp) %>%
+  dplyr::mutate(group = gsub("^ ", "", gsub("\\.\\.\\.", "", group)))
+
+snps_log_imp
+
+write_tsv(
+  snps_log_imp,
+  "Immunogenetics_T1D/genetics/teddy_r01/risk_scores/grs2x/tm_r3_imp/full_qc/score_results_with_imp_log_summary.txt")
+
+```
+
+
+# **SNP Quality Check**
+
+Comparing with .pvar file from input data for the quality of SNPs used.
+
+```{r}
+head(SNPs_input_impute)
+
+```
+
+```{r}
+# Make chr:pos in imputed data
+SNPs_input_impute$chr_pos = paste0(
+  SNPs_input_impute$`#CHROM`, ":", SNPs_input_impute$POS)
+
+# Subset imputed data to 67 SNPs
+SNPs_input_subset <- SNPs_input_impute %>%
+  dplyr::filter(chr_pos %in% snps_log$chr_pos)
+
+# Join to get cluster info alongside INFO field
+SNP_quality_check <- snps_log %>%
+  left_join(SNPs_input_subset, by = c("chr_pos"))
+
+# View quality info
+SNP_quality_check[, c("#CHROM", "POS", "group", "INFO")]
+
+
+# Extract MAF and R2 from INFO column using regular expressions
+SNP_quality_check <- SNP_quality_check %>%
+  mutate(
+    MAF_value = as.numeric(str_extract(INFO, "(?<=MAF=)[^;]+")),
+    R2_value  = as.numeric(str_extract(INFO, "(?<=R2=)[^;]+")))
+
+```
+
+Summary of MAF:
+
+`r summary(SNP_quality_check$MAF_value)`
+
+Summary of R2:
+
+`r summary(SNP_quality_check$R2_value)`
+
+
+# **Session Info**
+
+```{r session_info}
+sessionInfo()
+```
+
+```{r}
+
+# Check how many IIDs overlap
+overlap_iids <- intersect(prs_scores_imputed$IID, GRS2x_matprot_imputed$IID)
+
+# Number of overlapping IIDs
+length(overlap_iids)
+
+# View which IIDs overlap
+print(overlap_iids)
+
+
+# Visualization
+library(VennDiagram)
+library(grid)
+
+# Open a new plotting page
+grid.newpage()
+
+# Draw Venn diagram
+draw.pairwise.venn(
+  area1 = nrow(prs_scores_imputed),
+  area2 = nrow(GRS2x_matprot_imputed),
+  cross.area = length(overlap_iids),
+  category = c("ImmunoT1D", "Mat_prot"),
+  fill = c("skyblue", "orange"),
+  alpha = 0.5,
+  cex = 2,
+  cat.cex = 1.5,
+  cat.pos = c(-20, 20)
+)
+
+```
+
+
+
+```{r}
+
+# Check how many IDs overlap
+overlap_ids <- intersect(prs_scores_imputed$ID, GRS2x_matprot_imputed$ID)
+
+# Number of overlapping IDs
+length(overlap_ids)
+
+# View which IDs overlap
+print(overlap_ids)
+
+
+# Visualization
+library(VennDiagram)
+library(grid)
+
+# Open a new plotting page
+grid.newpage()
+
+# Draw Venn diagram
+draw.pairwise.venn(
+  area1 = nrow(prs_scores_imputed),
+  area2 = nrow(GRS2x_matprot_imputed),
+  cross.area = length(overlap_ids),
+  category = c("ImmunoT1D", "Mat_prot"),
+  fill = c("skyblue", "orange"),
+  alpha = 0.5,
+  cex = 2,
+  cat.cex = 1.5,
+  cat.pos = c(-20, 20)
+)
+
+```

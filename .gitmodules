@@ -1,0 +1,6 @@
+[submodule "PRSedm"]
+	path = PRSedm
+	url = git@github.com:sethsh7/PRSedm.git
+[submodule "imputation"]
+	path = imputation
+	url = git@github.com:rkjcollab/imputation.git

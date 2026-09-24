@@ -2,8 +2,6 @@
 # fathers, and siblings and run chi-square test on allele frequencies in each
 # group versus fathers. Not used for GRS2x score generation.
 
-# Script "extract_grs2x_variants.R" should be run once before this one.
-
 # Setup ------------------------------------------------------------------------
 
 library(here)
@@ -14,8 +12,8 @@ library(readxl)
 plink <- "plink2"
 plink1 <- "plink"
 
-pheno_path <- paste0(study_specs$teddy$intermed_out_dir, "/pheno_all_ia.rds")
-risk_score_dir <- dirname(study_specs$teddy$grs2_path)
+pheno_path <- paste0(study_specs$intermed_out_dir, "/pheno_all_ia.rds")
+risk_score_dir <- dirname(study_specs$grs2_path)
 # same as pheno_all_t1d.rds
 snp_list_path <- here("PRSedm/snplists/grs2_version_snplists.xlsx")
 
@@ -40,18 +38,24 @@ write_tsv(pheno_s, paste0(risk_score_dir, "/t1d_sib_ids.txt"), col_names = F)
 # Make mom vs. dad file for test
 pheno_plink_m <- rbind(
   pheno_d %>% dplyr::mutate(PHENO = 1),
-  pheno_m %>% dplyr::mutate(PHENO = 2))
+  pheno_m %>% dplyr::mutate(PHENO = 2)
+)
 write_tsv(
   pheno_plink_m,
-  paste0(risk_score_dir, "/t1d_dad_mom_pheno_assoc.txt"), col_names = F)
+  paste0(risk_score_dir, "/t1d_dad_mom_pheno_assoc.txt"),
+  col_names = F
+)
 
 # Make sib vs. dad file for test
 pheno_plink_s <- rbind(
   pheno_d %>% dplyr::mutate(PHENO = 1),
-  pheno_s %>% dplyr::mutate(PHENO = 2))
+  pheno_s %>% dplyr::mutate(PHENO = 2)
+)
 write_tsv(
   pheno_plink_s,
-  paste0(risk_score_dir, "/t1d_dad_sib_pheno_assoc.txt"), col_names = F)
+  paste0(risk_score_dir, "/t1d_dad_sib_pheno_assoc.txt"),
+  col_names = F
+)
 
 # Run PLINK --------------------------------------------------------------------
 
@@ -60,30 +64,34 @@ plink_args <- c(
   "--pfile", paste0(risk_score_dir, "/chr_all_concat_grs2x"),
   "--keep", paste0(risk_score_dir, "/t1d_dad_ids.txt"),
   "--freq",
-  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_dad"))
+  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_dad")
+)
 system2(plink, plink_args)
 
 plink_args <- c(
   "--pfile", paste0(risk_score_dir, "/chr_all_concat_grs2x"),
   "--keep", paste0(risk_score_dir, "/t1d_mom_ids.txt"),
   "--freq",
-  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_mom"))
+  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_mom")
+)
 system2(plink, plink_args)
 
 plink_args <- c(
   "--pfile", paste0(risk_score_dir, "/chr_all_concat_grs2x"),
   "--keep", paste0(risk_score_dir, "/t1d_sib_ids.txt"),
   "--freq",
-  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_sib"))
+  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_sib")
+)
 system2(plink, plink_args)
 
 # Make file with only mom and dads with T1D
 plink_args <- c(
   "--pfile", paste0(risk_score_dir, "/chr_all_concat_grs2x"),
   "--keep", paste0(risk_score_dir, "/t1d_dad_ids.txt"),
-    paste0(risk_score_dir, "/t1d_mom_ids.txt"),
+  paste0(risk_score_dir, "/t1d_mom_ids.txt"),
   "--make-bed",
-  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_dad_mom"))
+  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_dad_mom")
+)
 system2(plink, plink_args)
 
 # Make file with only sib and dads with T1D
@@ -92,18 +100,22 @@ plink_args <- c(
   "--keep", paste0(risk_score_dir, "/t1d_dad_ids.txt"),
   paste0(risk_score_dir, "/t1d_sib_ids.txt"),
   "--make-bed",
-  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_dad_sib"))
+  "--out", paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_dad_sib")
+)
 system2(plink, plink_args)
 
 # Make table with AFs ----------------------------------------------------------
 
 # Read in PLINK results
 af_d <- read_delim(
-  paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_dad.afreq"))
+  paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_dad.afreq")
+)
 af_m <- read_delim(
-  paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_mom.afreq"))
+  paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_mom.afreq")
+)
 af_s <- read_delim(
-  paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_sib.afreq"))
+  paste0(risk_score_dir, "/chr_all_concat_grs2x_t1d_sib.afreq")
+)
 
 # Read in GRS2x SNP list
 snp_list <- read_xlsx(snp_list_path, sheet = "GRS2X_TOPMED_R3")
@@ -113,18 +125,21 @@ af_fam_tmp <- inner_join(
   af_m %>% select(-`#CHROM`, -OBS_CT),
   af_d %>% select(-`#CHROM`, -OBS_CT),
   by = c("ID", "REF", "ALT"),
-  suffix = c("_mother", "_father"))
+  suffix = c("_mother", "_father")
+)
 af_fam <- inner_join(
   af_fam_tmp,
   af_s %>%
     select(-`#CHROM`, -OBS_CT) %>%
     dplyr::rename(ALT_FREQS_sibling = ALT_FREQS),
-  by = c("ID", "REF", "ALT"))  # all 64, so same ALT
+  by = c("ID", "REF", "ALT")
+) # all 64, so same ALT
 
 af_fam_grs2x <- left_join(
   snp_list %>% dplyr::mutate(ID = paste0(POSITION_HG38, ":", REF, ":", ALT)),
   af_fam,
-  by = c("ID", "REF", "ALT"))
+  by = c("ID", "REF", "ALT")
+)
 
 write_tsv(af_fam_grs2x, paste0(risk_score_dir, "/afreq_by_fdr_grs2x.txt"))
 
@@ -135,7 +150,8 @@ plink_args <- c(
   "--pheno", paste0(risk_score_dir, "/t1d_dad_mom_pheno_assoc.txt"),
   "--assoc",
   "--keep-allele-order",
-  "--out", paste0(risk_score_dir, "/t1d_dad_mom_pheno_assoc_result"))
+  "--out", paste0(risk_score_dir, "/t1d_dad_mom_pheno_assoc_result")
+)
 system2(plink1, plink_args)
 
 plink_args <- c(
@@ -143,6 +159,6 @@ plink_args <- c(
   "--pheno", paste0(risk_score_dir, "/t1d_dad_sib_pheno_assoc.txt"),
   "--assoc",
   "--keep-allele-order",
-  "--out", paste0(risk_score_dir, "/t1d_dad_sib_pheno_assoc_result"))
+  "--out", paste0(risk_score_dir, "/t1d_dad_sib_pheno_assoc_result")
+)
 system2(plink1, plink_args)
-
