@@ -1,17 +1,14 @@
 # MatProt PRS Family History Analysis
 
-This repository was dervied from the internal project:
-https://github.com/rkjcollab/explore_matprot, specifically from the
-genetics/famhistPRS/ subdirectory at tag paper-release-famhistPRS and commit
-8765959. The code was extracted using git subtree split to preserve history.
+This repository was dervied from the internal project
+[`rkjcollab/explore_matprot`](https://github.com/rkjcollab/explore_matprot),
+specifically from the `genetics/famhistPRS` subdirectory at tag
+`paper-release-famhistPRS` and commit `8765959`. The code was extracted using
+git subtree split to preserve history.
 
-This repository contains the analysis code for a manuscript evaluating whether
- type 1 diabetes polygenic risk scores explain first-degree relative patterns
- in TEDDY and related analyses.
-
-The repository is organized as a reproducible research compendium: the code is
-here but the TEDDY data used cannot be made public and is stored outside the
-repo at the RKJcollab data root `RKJCOLLAB`.
+This repository contains the analysis code for a manuscript that investigated
+whether genetic susceptibility to T1D (measured by the GRS2x) explains that
+relative maternal protection from T1D in offspring exposed to maternal T1D.
 
 ## Data
 
@@ -72,9 +69,10 @@ projects.
 
 The GRS2x was calculated using the script
 [`reports/teddy_immunoT1D_tmr3_grs2x.Rmd`](reports/teddy_immunoT1D_tmr3_grs2x.Rmd),
-again copied here but run in the separate `rkjcollab/immuno_t1d` repo.
+again copied here but run in the separate
+[`rkjcollab/immuno_t1d`](https://github.com/rkjcollab/immuno_t1d) repo.
 
-[`reports/time_varying_analysis.Rmd`](reports/time_varying_analysis.Rmd) is an
-archived exploratory report that a preliminary step before the final manuscript
+The report [`reports/time_varying_analysis.Rmd`](reports/time_varying_analysis.Rmd)
+is an archived exploratory report that documents a preliminary step in the
 time-varying analysis. It is frozen at the point it was last rendered for
-decision masking and is not maintained with the pipeline.
+decision making and is kept for reference only.
